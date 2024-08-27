@@ -1,0 +1,14 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<BorlandProject>
+	<Transactions>
+    <Transaction>2021/09/15 10:44:09.000.118,=C:\Users\ZXDunny\Documents\Embarcadero\Studio\Projects\Unit1.pas</Transaction>
+    <Transaction>2024/08/25 14:19:31.000.174,=C:\Users\ZXDunny\Documents\Embarcadero\Studio\Projects\Unit1.pas</Transaction>
+    <Transaction>2024/08/25 14:20:20.000.495,C:\Users\ZXDunny\Documents\Embarcadero\Studio\Projects\Unit1.pas=D:\Projects\Chip8\mainform.pas</Transaction>
+    <Transaction>2024/08/25 14:20:20.000.495,C:\Users\ZXDunny\Documents\Embarcadero\Studio\Projects\Unit1.dfm=D:\Projects\Chip8\mainform.dfm</Transaction>
+    <Transaction>2024/08/25 14:20:26.000.157,C:\Users\ZXDunny\Documents\Embarcadero\Studio\Projects\Project1.dproj=D:\Projects\Chip8\chip8.dproj</Transaction>
+    <Transaction>2024/08/25 14:35:34.000.717,=D:\Projects\Chip8\Unit1.pas</Transaction>
+    <Transaction>2024/08/25 14:38:22.000.654,D:\Projects\Chip8\Unit1.pas=D:\Projects\Chip8\Display.pas</Transaction>
+    <Transaction>2024/08/26 10:38:16.000.502,=D:\Projects\Chip8\Unit1.pas</Transaction>
+    <Transaction>2024/08/26 10:38:45.000.604,D:\Projects\Chip8\Chip8Int.pas=D:\Projects\Chip8\Unit1.pas</Transaction>
+  </Transactions>
+</BorlandProject>

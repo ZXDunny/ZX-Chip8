@@ -7,7 +7,7 @@ Uses SysUtils, Types, Classes, Windows, Math;
 Type
 
   TChip8Interpreter = Class(TThread)
-    PC: LongWord;
+    PC, StackPtr: LongWord;
     ROMName: String;
     Regs: Array [0..15] of Byte;
     Memory: Array [0..4095] of Byte;
@@ -15,7 +15,7 @@ Type
     Display: Array[0..64*32-1] of Byte;
     KeyStates: Array[0..15] of Boolean;
     NeedPause, NeedResume, Paused, DisplayFlag: Boolean;
-    Timer, sTimer, mCycles, NextFrame, StackPtr, i, icnt, ipf: Integer;
+    Timer, sTimer, mCycles, NextFrame, i, icnt, ipf: Integer;
     Procedure Reset;
     Procedure InstructionLoop;
     Procedure Execute; Override;
@@ -31,10 +31,10 @@ Type
 
 Const
 
-  Font: Array [0..79] of Byte = ($F0,$90,$90,$90,$F0,$20,$60,$20,$20,$70,$F0,$10,$F0,$80,$F0,$F0,$10,$F0,$10,$F0,
-                                 $90,$90,$F0,$10,$10,$F0,$80,$F0,$10,$F0,$F0,$80,$F0,$90,$F0,$F0,$10,$20,$40,$40,
-                                 $F0,$90,$F0,$90,$F0,$F0,$90,$F0,$10,$F0,$F0,$90,$F0,$90,$90,$E0,$90,$E0,$90,$E0,
-                                 $F0,$80,$80,$80,$F0,$E0,$90,$90,$90,$E0,$F0,$80,$F0,$80,$F0,$F0,$80,$F0,$80,$80);
+  Font: Array [0..79] of Byte = ($F0, $90, $90, $90, $F0, $20, $60, $20, $20, $70, $F0, $10, $F0, $80, $F0, $F0, $10, $F0, $10, $F0,
+                                 $90, $90, $F0, $10, $10, $F0, $80, $F0, $10, $F0, $F0, $80, $F0, $90, $F0, $F0, $10, $20, $40, $40,
+                                 $F0, $90, $F0, $90, $F0, $F0, $90, $F0, $10, $F0, $F0, $90, $F0, $90, $90, $E0, $90, $E0, $90, $E0,
+                                 $F0, $80, $80, $80, $F0, $E0, $90, $90, $90, $E0, $F0, $80, $F0, $80, $F0, $F0, $80, $F0, $80, $80);
 
 implementation
 
@@ -62,6 +62,7 @@ End;
 Function TChip8Interpreter.GetNextFrameTime: Integer;
 Begin
 
+  Dec(mCycles, 3668);
   Result := ((mCycles + 2572) div 3668) * 3668 + 1096;
 
 End;
@@ -71,7 +72,7 @@ var
   idx: Integer;
 Begin
 
-  StackPtr := -1;
+  StackPtr := 0;
   mCycles := 0;
   PC := $200;
 
@@ -181,6 +182,11 @@ Begin
       $0:
         Begin
           Case nnn of
+            $0:
+              Begin
+                // $0000 we will handle as a looping NOP.
+                Dec(PC, 2);
+              End;
             $E0:
               Begin
                 // $00E0 - Clear display
@@ -192,7 +198,7 @@ Begin
               Begin
                 // $00EE - RET
                 PC := Stack[StackPtr];
-                Dec(StackPtr);
+                StackPtr := (StackPtr -1) And $3FF;
                 Cycles := 10;
               End;
           End;
@@ -206,7 +212,7 @@ Begin
       $2:
         Begin
           // 2nnn - CALL
-          Inc(StackPtr);
+          StackPtr := (StackPtr +1) And $3FF;
           Stack[StackPtr] := PC;
           PC := nnn;
           Cycles := 26;
@@ -301,7 +307,7 @@ Begin
               Begin
                 // 8xy6 - Shift Reg X right
                 t := Regs[y] And 1;
-                Regs[x] := Regs[y] Shr 1;
+                Regs[x] := Byte(Regs[y] Shr 1);
                 Regs[$F] := t;
                 Cycles := 44;
               End;
@@ -309,7 +315,7 @@ Begin
               Begin
                 // 8xy7 - Value of Subtract Reg X from Reg Y into Reg X
                 t := Ord(Regs[y] >= Regs[x]);
-                Regs[x] := Regs[y] - Regs[x];
+                Regs[x] := Byte(Regs[y] - Regs[x]);
                 Regs[$F] := t;
                 Cycles := 44;
               End;
@@ -317,7 +323,7 @@ Begin
               Begin
                 // 8xyE - Shift Reg X left
                 t := Ord((Regs[y] And 128) > 0);
-                Regs[x] := Regs[y] Shl 1;
+                Regs[x] := Byte(Regs[y] Shl 1);
                 Regs[$F] := t;
                 Cycles := 44;
               End;
@@ -513,8 +519,6 @@ Begin
 End;
 
 Procedure TChip8Interpreter.Frame(Cycles: Integer);
-Var
-  Idx: Integer;
 Begin
 
   Inc(mCycles, Cycles);

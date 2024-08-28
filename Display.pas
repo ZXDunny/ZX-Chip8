@@ -2,14 +2,14 @@ unit Display;
 
 interface
 
-Uses Windows, Controls, Forms, dglOpenGL;
+Uses Windows, Controls, ExtCtrls, Forms, Graphics, dglOpenGL;
 
 Procedure InitGL(Handle: hWnd);
-Procedure InitDisplay(FPS, DisplayWidth, DisplayHeight, WindowWidth, WindowHeight: Integer; Aspect: Boolean; Handle: hWnd);
-Procedure ResizeDisplay(newWidth, newHeight: Integer);
+Procedure InitDisplay(FPS, DisplayWidth, DisplayHeight: Integer; Aspect: Boolean; Var Control: TPanel);
 Procedure SetScaling(sWidth, sHeight: Integer);
 Procedure SwitchFullScreen;
 Procedure Refresh_Display;
+Procedure ResizeDisplay;
 Procedure WaitForSync;
 Procedure FrameLoop;
 Procedure CloseGL;
@@ -27,6 +27,8 @@ Var
   StartTime, FrameTime: Double;
   GLX, GLY, GLW, GLH: Integer;
   bStyle: TFormBorderStyle;
+  BackRed, BackGreen, BackBlue: Single;
+  GLPanel: ^TPanel;
 
 implementation
 
@@ -113,9 +115,6 @@ var
   newWidth, newHeight: Integer;
 Begin
 
-  glClearColor(0, 0, 0, 0);
-  glClearDepth(1);
-
   if MaintainAspect Then Begin
 
     ratio := Min(winWidth / intWidth, winHeight / intheight);
@@ -162,8 +161,17 @@ Begin
 
 End;
 
-Procedure InitDisplay(FPS, DisplayWidth, DisplayHeight, WindowWidth, WindowHeight: Integer; Aspect: Boolean; Handle: hWnd);
+Procedure InitDisplay(FPS, DisplayWidth, DisplayHeight: Integer; Aspect: Boolean; Var Control: TPanel);
+Var
+  BkColor: LongWord;
 Begin
+
+  GLPanel := @Control;
+  BkColor := ColorToRGB(GLPanel^.Color);
+
+  BackBlue := ((BkColor And $FF0000) Shr 16) / 256;
+  BackGreen := ((BkColor And $FF00) Shr 8) / 256;
+  BackRed := (BkColor And $FF) / 256;
 
   GLX := 0; GLY := 0; GLW := DisplayWidth; GLH := DisplayHeight;
   MaintainAspect := Aspect;
@@ -171,9 +179,8 @@ Begin
   SetLength(DisplayArray, DisplayWidth * SizeOf(LongWord) * DisplayHeight);
   intWidth := DisplayWidth;
   intHeight := DisplayHeight;
-  InitGL(Handle);
-
-  ResizeDisplay(windowWidth, windowHeight);
+  InitGL(GLPanel^.Handle);
+  ResizeDisplay;
 
   InitTimer;
   StartTime := 0;
@@ -184,12 +191,12 @@ Begin
 
 End;
 
-Procedure ResizeDisplay(newWidth, newHeight: Integer);
+Procedure ResizeDisplay;
 Begin
 
-  winWidth := newWidth;
-  winHeight := newHeight;
-  SetScaling(newWidth, newHeight);
+  winWidth := GLPanel^.ClientWidth;
+  winHeight := GLPanel^.ClientHeight;
+  SetScaling(winWidth, winHeight);
   ResizeGL;
 
 End;
@@ -307,6 +314,13 @@ Begin
       glTexSubImage2D(GL_TEXTURE_2D, 0, GLX, GLY, GLW, GLH, GL_BGRA, GL_UNSIGNED_BYTE, @DisplayArray[GLX + IntWidth * GLY]);
     End;
   End;
+
+  If FullScreen Then
+    glClearColor(0, 0, 0, 0)
+  Else
+    glClearColor(backRed, backGreen, backBlue, 0);
+
+  glClear(GL_COLOR_BUFFER_BIT);
 
   glBegin(GL_QUADS);
   glTexCoord2D(0, 0); glVertex2D(0, 0);

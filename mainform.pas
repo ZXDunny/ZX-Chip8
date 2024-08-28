@@ -11,13 +11,14 @@ type
   TMainForm = class(TForm)
     DisplayPanel: TPanel;
     DisplayTimer: TTimer;
+    OpenDialog: TOpenDialog;
     MainMenu: TMainMenu;
     File1: TMenuItem;
     menuOpen: TMenuItem;
     menuReset: TMenuItem;
     N1: TMenuItem;
     menuExit: TMenuItem;
-    OpenDialog: TOpenDialog;
+    menuRecentfiles: TMenuItem;
     procedure FormCreate(Sender: TObject);
     procedure FormKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);
     procedure FormShow(Sender: TObject);
@@ -30,10 +31,17 @@ type
     procedure menuResetClick(Sender: TObject);
   private
     { Private declarations }
+    MRUList: TStringlist;
     procedure OnAppMessage(var Msg: TMsg; var Handled: Boolean);
     procedure CMDialogKey(var msg: TCMDialogKey);  message CM_DIALOGKEY;
   public
     { Public declarations }
+    Procedure LoadROM(Filename: String);
+    Procedure AddToMRUList(Name: String);
+    Procedure LoadMRUList;
+    Procedure SaveMRUList;
+    Procedure MakeMRUMenu;
+    procedure MRUItemClick(Sender: TObject);
   end;
 
 var
@@ -75,12 +83,8 @@ procedure TMainForm.menuOpenClick(Sender: TObject);
 begin
 
   With OpenDialog Do
-    If Execute Then Begin
-      PauseInterpreter(interpreter);
-      Interpreter.ROMName := Filename;
-      Interpreter.Reset;
-      ResumeInterpreter(Interpreter);
-    End;
+    If Execute Then
+      LoadROM(Filename);
 
 end;
 
@@ -113,9 +117,11 @@ begin
   If (Key = VK_RETURN) and (ssAlt in Shift) Then Begin
     If FullScreen Then Begin
       DisplayPanel.Align := alNone;
+      Self.Menu := MainMenu;
     End Else Begin
       Rect := DisplayPanel.BoundsRect;
       DisplayPanel.Align := alClient;
+      Self.Menu := nil;
     End;
     SwitchFullScreen;
     If Not FullScreen Then Begin
@@ -152,8 +158,7 @@ end;
 procedure TMainForm.DisplayPanelResize(Sender: TObject);
 begin
 
-  If DisplayReady Then
-    ResizeDisplay(DisplayPanel.ClientWidth, DisplayPanel.ClientHeight);
+  If DisplayReady Then ResizeDisplay;
 
 end;
 
@@ -181,8 +186,9 @@ end;
 procedure TMainForm.FormCreate(Sender: TObject);
 begin
 
-  InitDisplay(60, 64, 32, DisplayPanel.ClientWidth, DisplayPanel.ClientHeight, True, DisplayPanel.Handle);
+  InitDisplay(60, 64, 32, True, DisplayPanel);
   Application.OnMessage := OnAppMessage;
+  LoadMRUList;
 
 end;
 
@@ -195,7 +201,84 @@ begin
   Until Not Interpreter.Finished;
 
   CloseGL;
+  SaveMRUList;
 
 end;
+
+Procedure TMainForm.LoadROM(Filename: String);
+Begin
+
+  PauseInterpreter(interpreter);
+  Interpreter.ROMName := Filename;
+  AddToMRUList(Filename);
+  Interpreter.Reset;
+  ResumeInterpreter(Interpreter);
+
+End;
+
+Procedure TMainForm.LoadMRUList;
+Begin
+
+  MRUList := TStringlist.Create;
+  If FileExists('recentfiles') Then
+    MRUList.LoadFromFile('recentfiles');
+
+  MakeMRUMenu;
+
+End;
+
+Procedure TMainForm.SaveMRUList;
+Begin
+
+  MRUList.SaveToFile('recentfiles');
+
+End;
+
+Procedure TMainForm.AddToMRUList(Name: String);
+Var
+  i: Integer;
+Begin
+
+  i := 0;
+  While i < MRUList.Count Do Begin
+    if LowerCase(MRUList[i]) = LowerCase(Name) Then
+      MRUList.Delete(i)
+    Else
+      Inc(i);
+  End;
+
+  MRUList.Insert(0, Name);
+  While MRUList.Count > 10 Do
+    MRUList.Delete(10);
+
+  MakeMRUMenu;
+
+End;
+
+Procedure TMainForm.MakeMRUMenu;
+Var
+  i: Integer;
+  Item: TMenuItem;
+Begin
+
+  menuRecentfiles.Clear;
+  For i := 0 To MRUList.Count -1 Do Begin
+    Item := TMenuItem.Create(nil);
+    Item.Caption := ExtractFileName(MRUList[i]);
+    Item.OnClick := MRUItemClick;
+    Item.Tag := i;
+    menuRecentFiles.Add(Item);
+  End;
+
+End;
+
+procedure TMainForm.MRUItemClick(Sender: TObject);
+begin
+
+  LoadROM(MRUList[(Sender as TMenuItem).Tag]);
+
+end;
+
+
 
 end.

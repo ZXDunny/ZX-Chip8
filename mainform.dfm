@@ -41,6 +41,13 @@ object MainForm: TMainForm
     Left = 16
     Top = 16
   end
+  object OpenDialog: TOpenDialog
+    Filter = 'All Files|*.*'
+    Options = [ofEnableSizing, ofDontAddToRecent]
+    Title = 'Open Chip 8 ROM image'
+    Left = 136
+    Top = 16
+  end
   object MainMenu: TMainMenu
     Left = 80
     Top = 16
@@ -49,6 +56,9 @@ object MainForm: TMainForm
       object menuOpen: TMenuItem
         Caption = 'Open ROM image...'
         OnClick = menuOpenClick
+      end
+      object menuRecentfiles: TMenuItem
+        Caption = 'Recent files'
       end
       object menuReset: TMenuItem
         Caption = 'Reset'
@@ -62,12 +72,5 @@ object MainForm: TMainForm
         OnClick = menuExitClick
       end
     end
-  end
-  object OpenDialog: TOpenDialog
-    Filter = 'All Files|*.*'
-    Options = [ofEnableSizing, ofDontAddToRecent]
-    Title = 'Open Chip 8 ROM image'
-    Left = 136
-    Top = 16
   end
 end

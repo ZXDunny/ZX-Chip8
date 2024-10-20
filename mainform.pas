@@ -4,7 +4,7 @@ interface
 
 uses
   Winapi.Windows, Winapi.Messages, System.SysUtils, System.Variants, System.Classes, Vcl.Graphics,
-  Vcl.Controls, Vcl.Forms, Vcl.Dialogs, dglOpenGL, display, Vcl.ExtCtrls, Chip8Int,
+  Vcl.Controls, Vcl.Forms, Vcl.Dialogs, dglOpenGL, display, Vcl.ExtCtrls, Chip8Int, Math,
   Vcl.Menus;
 
 type
@@ -19,6 +19,13 @@ type
     N1: TMenuItem;
     menuExit: TMenuItem;
     menuRecentfiles: TMenuItem;
+    N2: TMenuItem;
+    Chip8Model1: TMenuItem;
+    CosmacVIPChip81: TMenuItem;
+    SChip101: TMenuItem;
+    SChip111: TMenuItem;
+    XOChip1: TMenuItem;
+    ModernSChip1: TMenuItem;
     procedure FormCreate(Sender: TObject);
     procedure FormKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);
     procedure FormShow(Sender: TObject);
@@ -29,13 +36,16 @@ type
     procedure menuOpenClick(Sender: TObject);
     procedure menuExitClick(Sender: TObject);
     procedure menuResetClick(Sender: TObject);
+    procedure CosmacVIPChip81Click(Sender: TObject);
   private
     { Private declarations }
+    MaxIPF: Integer;
     MRUList: TStringlist;
     procedure OnAppMessage(var Msg: TMsg; var Handled: Boolean);
     procedure CMDialogKey(var msg: TCMDialogKey);  message CM_DIALOGKEY;
   public
     { Public declarations }
+    Procedure SetModel(Model: Integer);
     Procedure LoadROM(Filename: String);
     Procedure AddToMRUList(Name: String);
     Procedure LoadMRUList;
@@ -46,14 +56,13 @@ type
 
 var
   Main: TMainForm;
+  CurrentModel: Integer;
   Interpreter: TChip8Interpreter;
+  ModelItems: Array of ^TMenuItem;
 
 Const
-  KeyCodes: Array[0..$F] of Char =
-    ('X', '1', '2', '3',
-     'Q', 'W', 'E', 'A',
-     'S', 'D', 'Z', 'C',
-     '4', 'R', 'F', 'V');
+
+  ModelNames: Array[0..4] of String = ('VIP', 'SChip1.0', 'SChip1.1', 'SChip Modern', 'XO-Chip');
 
 implementation
 
@@ -91,9 +100,9 @@ end;
 procedure TMainForm.menuResetClick(Sender: TObject);
 begin
 
-  PauseInterpreter(interpreter);
   Interpreter.Reset;
-  ResumeInterpreter(interpreter);
+  If Interpreter.ROMName <> '' Then
+    Interpreter.LoadROM(Interpreter.ROMName);
 
 end;
 
@@ -105,9 +114,27 @@ begin
 
 end;
 
-procedure TMainForm.FormKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);
+Procedure TMainForm.SetModel(Model: Integer);
 Var
   i: Integer;
+Begin
+  PauseInterpreter(interpreter);
+  CurrentModel := Model;
+  Interpreter.SetCore(CurrentModel);
+  InitDisplay(60, Interpreter.Core.DispWidth, Interpreter.Core.DispHeight, True, DisplayPanel);
+  For i := 0 To Length(ModelItems) -1 Do
+    If ModelItems[i]^.Tag = CurrentModel Then
+      ModelItems[i]^.Checked := True;
+  ResumeInterpreter(interpreter);
+End;
+
+procedure TMainForm.CosmacVIPChip81Click(Sender: TObject);
+begin
+  SetModel((Sender as TMenuItem).Tag);
+  (Sender as TMenuItem).Checked := True;
+end;
+
+procedure TMainForm.FormKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);
 {$J+}
 const
   rect: TRect = (Left:0; Top:0; Right:0; Bottom:0);
@@ -131,20 +158,14 @@ begin
     Exit;
   End;
 
-  For i := 0 To 15 Do
-    If Key = Ord(KeyCodes[i]) Then
-      Interpreter.KeyStates[i] := True;
+  Interpreter.KeyDown(Key);
 
 end;
 
 procedure TMainForm.FormKeyUp(Sender: TObject; var Key: Word; Shift: TShiftState);
-Var
-  i: integer;
 begin
 
-  For i := 0 To 15 Do
-    If Key = Ord(KeyCodes[i]) Then
-      Interpreter.KeyStates[i] := False;
+  Interpreter.KeyUp(key);
 
 end;
 
@@ -152,26 +173,44 @@ procedure TMainForm.FormShow(Sender: TObject);
 begin
 
   Interpreter := TChip8Interpreter.Create(False);
+  Interpreter.SetCore(CurrentModel);
 
 end;
 
 procedure TMainForm.DisplayPanelResize(Sender: TObject);
 begin
 
-  If DisplayReady Then ResizeDisplay;
+  If DisplayReady Then Begin
+    ResizeDisplay;
+    DisplayUpdate := True;
+  End;
 
 end;
 
 procedure TMainForm.DisplayTimerTimer(Sender: TObject);
 Var
-  Idx: Integer;
+  ips: Single;
+  s: String;
 begin
 
   If DisplayUpdate Then Begin
-    For Idx := 0 To Length(Interpreter.Display) -1 Do
-      DisplayArray[Idx] := $FFFFFF * Interpreter.Display[Idx];
+    Interpreter.Render;
     FrameLoop;
-  End;
+  End Else
+    If FUllSpeed Then
+      FrameLoop;
+
+  MaxIPF := Round((Interpreter.iPerFrame + 0.5 + MaxIPF) / 2);
+  ips := (MaxIPF * 60) / 1e6;
+  s := '';
+  if Interpreter.ROMName <> '' Then
+    s := ExtractFileName(Interpreter.ROMName) + ' - '
+  Else
+    s := 'Idle - ';
+  s := s + Format('%.0n', [MaxIPF + 0.0]) + ' ipf';
+  If ips > 0.1 Then
+    s := s+ ' (' + Format('%.1f', [ips]) + 'M ips)';
+  Caption := '[' + ModelNames[CurrentModel] + '] ' + s;
 
 end;
 
@@ -186,8 +225,15 @@ end;
 procedure TMainForm.FormCreate(Sender: TObject);
 begin
 
+  CurrentModel := Chip8_VIP;
   InitDisplay(60, 64, 32, True, DisplayPanel);
   Application.OnMessage := OnAppMessage;
+  SetLength(ModelItems, 5);
+  ModelItems[0] := @CosmacVIPChip81;
+  ModelItems[1] := @SChip101;
+  ModelItems[2] := @SChip111;
+  ModelItems[3] := @ModernSChip1;
+  ModelItems[4] := @XOChip1;
   LoadMRUList;
 
 end;
@@ -195,24 +241,21 @@ end;
 procedure TMainForm.FormDestroy(Sender: TObject);
 begin
 
-  Interpreter.Terminate;
-  Repeat
-    Sleep(1);
-  Until Not Interpreter.Finished;
-
-  CloseGL;
   SaveMRUList;
+  CloseInterpreter(Interpreter);
+  CloseGL;
 
 end;
 
 Procedure TMainForm.LoadROM(Filename: String);
 Begin
 
-  PauseInterpreter(interpreter);
-  Interpreter.ROMName := Filename;
+  If ExtractFileExt(Filename) = '.xo8' Then
+    SetModel(Chip8_XOChip);
+
+  Interpreter.LoadROM(Filename);
   AddToMRUList(Filename);
-  Interpreter.Reset;
-  ResumeInterpreter(Interpreter);
+  MaxIPF := 0;
 
 End;
 
@@ -251,6 +294,7 @@ Begin
   While MRUList.Count > 10 Do
     MRUList.Delete(10);
 
+  SaveMRUList;
   MakeMRUMenu;
 
 End;

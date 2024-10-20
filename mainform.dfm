@@ -4,7 +4,7 @@ object MainForm: TMainForm
   Caption = 'ZX-Chip8'
   ClientHeight = 208
   ClientWidth = 400
-  Color = clBtnFace
+  Color = clMedGray
   Font.Charset = DEFAULT_CHARSET
   Font.Color = clWindowText
   Font.Height = -11
@@ -31,6 +31,8 @@ object MainForm: TMainForm
     BevelEdges = []
     BevelOuter = bvNone
     FullRepaint = False
+    ParentBackground = False
+    ParentColor = True
     ShowCaption = False
     TabOrder = 0
     OnResize = DisplayPanelResize
@@ -53,6 +55,42 @@ object MainForm: TMainForm
     Top = 16
     object File1: TMenuItem
       Caption = 'File'
+      object Chip8Model1: TMenuItem
+        Caption = 'Chip8 Model'
+        object CosmacVIPChip81: TMenuItem
+          Caption = 'Cosmac VIP (Chip8)'
+          Checked = True
+          RadioItem = True
+          OnClick = CosmacVIPChip81Click
+        end
+        object SChip101: TMenuItem
+          Tag = 1
+          Caption = 'Legacy SChip 1.0'
+          RadioItem = True
+          OnClick = CosmacVIPChip81Click
+        end
+        object SChip111: TMenuItem
+          Tag = 2
+          Caption = 'Legacy SChip 1.1'
+          RadioItem = True
+          OnClick = CosmacVIPChip81Click
+        end
+        object ModernSChip1: TMenuItem
+          Tag = 3
+          Caption = 'Modern SChip'
+          RadioItem = True
+          OnClick = CosmacVIPChip81Click
+        end
+        object XOChip1: TMenuItem
+          Tag = 4
+          Caption = 'XO-Chip'
+          RadioItem = True
+          OnClick = CosmacVIPChip81Click
+        end
+      end
+      object N2: TMenuItem
+        Caption = '-'
+      end
       object menuOpen: TMenuItem
         Caption = 'Open ROM image...'
         OnClick = menuOpenClick

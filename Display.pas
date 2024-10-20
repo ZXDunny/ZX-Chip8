@@ -240,8 +240,8 @@ Begin
       If StartTime = 0 Then
         StartTime := GetTicks;
       Refresh_Display;
-      DisplayUpdate := False;
     End;
+    DisplayUpdate := False;
 
   End;
 

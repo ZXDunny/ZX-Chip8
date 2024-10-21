@@ -85,8 +85,6 @@ Begin
     ci := (cil shl 8) + GetMem(PC);
     Inc(PC);
 
-    // Log(IntToHex(PC - 2, 4) + ':' + IntToHex(ci, 4));
-
     OpCodes[ci Shr 12];
     Inc(icnt);
 
@@ -253,7 +251,7 @@ Begin
     pOfs := 16 - ((x Mod 8) * 2);
     x := (x * 2) And 112; y := (y * 2) And 62;
     Regs[$F] := 0;
-    For row := 0 To Min(n -1, 63 - y) Do Begin
+    For row := 0 To Min(n -1, (62 - y) Div 2) Do Begin
       b := GetMem(i + row);
       b := Bloat(b) Shl pOfs;
       bit := $80000000;
@@ -261,12 +259,10 @@ Begin
         bts := Ord(b And bit > 0);
         bit := bit Shr 1;
         Addr := x + col + (y + row * 2) * 128;
-        If Addr < $1FFF Then Begin
-          If DisplayMem[Addr] <> 0 Then Inc(cc);
-          np := DisplayMem[Addr] Xor bts;
-          DisplayMem[Addr] := np;
-          DisplayMem[Addr + 128] := np;
-        End;
+        If DisplayMem[Addr] <> 0 Then Inc(cc);
+        np := DisplayMem[Addr] Xor bts;
+        DisplayMem[Addr] := np;
+        DisplayMem[Addr + 128] := np;
       End;
     End;
     If cc > 0 Then Regs[$F] := 1;

@@ -137,7 +137,6 @@ Begin
     mCycles := 3250;
     NextFrame := 3668;
 
-//    DeleteFile('c:\temp\c8Log.txt');
   End;
 
 End;
@@ -171,8 +170,6 @@ Begin
     Inc(PC);
 
     Frame(40 + 28 * Ord((cil And $F0) > 0));
-
-//    Log(IntToHex(PC - 2, 4) + ':' + IntToHex(ci, 4));
 
     OpCodes[ci Shr 12];
     Inc(icnt);

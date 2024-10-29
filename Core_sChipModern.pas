@@ -22,7 +22,7 @@ Type
 
 implementation
 
-Uses Windows, SysUtils, Classes, Math, Chip8Int, Display;
+Uses Windows, SysUtils, Classes, Math, Chip8Int, Display, Sound;
 
 Procedure TSChipModernCore.BuildTables;
 Var
@@ -30,7 +30,6 @@ Var
 Begin
 
   Inherited;
-
 
   Opcodes[13] := OpDxyn;
   Opcodes0[$FB] := Op00FB; Opcodes0[$FC] := Op00FC;
@@ -50,6 +49,7 @@ Begin
   FillMemory(@Memory[0], Length(Memory), 0);
   for idx := 0 to 79 Do Memory[idx + 80] := Font[idx];
   for idx := 0 to 99 Do Memory[idx + 160] := HiresFont11[idx];
+  MakeSoundBuffers(60, 4);
 
 End;
 

@@ -21,6 +21,7 @@ Type
     ci, cil, Cycles, mCycles, LastFrameCount,
     Timer, sTimer, NextFrame, icnt, i,
     nnn, LastKey, keyStage: Integer;
+    sBuffPos, LastS: Integer;
     t, x, y, n: Byte;
     ExitLoop: Boolean;
     ipf, maxipf: Integer;

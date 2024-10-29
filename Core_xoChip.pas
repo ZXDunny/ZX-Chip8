@@ -8,6 +8,9 @@ Type
 
   TXOChipCore = Class(TSChipModernCore)
     DisplayMask: Byte;
+    PatternBuffer: Array[0..15] of Byte;
+    PatternOffset: Integer;
+    PatternPitch: Integer;
 
     Procedure BuildTables; Override;
     Procedure Reset; Override;
@@ -15,12 +18,14 @@ Type
     Procedure WriteMem(Address: Integer; Value: Byte); Override;
     Procedure SkipF000; inline;
     Procedure ApplyMask(Dest: pByte; Value: Byte); inline;
+    Procedure DoSoundTimer; Override;
 
     Procedure Op00E0; Override; Procedure Op3xnn; Override; Procedure Op4xnn; Override; Procedure Op5xy0; Override;
     Procedure Op9xy0; Override; Procedure OpDxyn; Override; Procedure OpEx9E; Override; Procedure OpExA1; Override;
     Procedure Op00Cn; Override; Procedure Op00FB; Override; Procedure Op00FC; Override; Procedure Op8xy6; Override;
     Procedure OpFx55; Override; Procedure OpFx65; Override; Procedure OpBnnn; Override; Procedure Op8xyE; Override;
-    Procedure OpFx1E; Override; Procedure OpFx75; Override; Procedure OpFx85; Override; Procedure OpFx3A;
+    Procedure OpFx18; Override; Procedure OpFx1E; Override; Procedure OpFx75; Override; Procedure OpFx85; Override;
+    Procedure OpFx3A;
 
     // New xo-Chip opcodes
 
@@ -31,7 +36,7 @@ Type
 
 implementation
 
-Uses Windows, SysUtils, Classes, Math, Chip8Int, Display;
+Uses Windows, SysUtils, Classes, Math, Chip8Int, Display, Sound;
 
 Procedure TXOChipCore.BuildTables;
 Var
@@ -57,7 +62,7 @@ Begin
   Opcodes8[6] := Op8xy6; Opcodes8[$E] := Op8xyE; OpcodesE[$9E] := OpEx9E; OpcodesE[$A1] := OpExA1;
   OpcodesF[$1E] := OpFx1E; OpcodesF[$55] := OpFx55; OpcodesF[$65] := OpFx65; OpcodesF[$75] := OpFx75;
   OpcodesF[$85] := OpFx85; OpcodesF[$00] := OpF000; OpcodesF[$01] := OpFn01; OpcodesF[$02] := OpF002;
-  OpcodesF[$3A] := OpFx3A;
+  OpcodesF[$3A] := OpFx3A; OpcodesF[$18] := OpFx18;
 
 End;
 
@@ -82,7 +87,10 @@ Begin
 
   Inherited;
   DisplayMask := 1;
-  for idx := 0 to 159 Do Memory[idx + 160] := xoChipFont[idx];
+  For idx := 0 To 159 Do Memory[idx + 160] := xoChipFont[idx];
+  For Idx := 0 To $F Do PatternBuffer[idx] := $F0;
+  PatternOffset := 0;
+  PatternPitch := 64;
 
 End;
 
@@ -95,6 +103,59 @@ End;
 Procedure TXOChipCore.ApplyMask(Dest: pByte; Value: Byte);
 Begin
   Dest^ := (Dest^ and Not DisplayMask) or (Value And DisplayMask);
+End;
+
+Procedure TXOChipCore.DoSoundTimer;
+Var
+  oSample: SmallInt;
+  dcIn, dcOut: Boolean;
+  Scalar, ScaleInc: Double;
+  idx, s1, s2, po, Level, nRate, fr: Integer;
+Begin
+  If sTimer > 0 Then Begin
+    Dec(sTimer);
+    dcIn := LastS = 0;
+    dcOut := sTimer = 0;
+
+    // Generate tones based on the pattern buffer
+
+    idx := 0;
+    nRate := Round(((4000 * Power(2, (PatternPitch - 64) / 48)) / 44100) * $10000);
+
+    While idx < BuffSize Do Begin
+      po := PatternOffset shr 16;
+      s1 := Ord(PatternBuffer[(po Shr 3) and 15] and (1 shl (7 - (po and 7))) <> 0);
+      s2 := Ord(PatternBuffer[((po + 1) Shr 3) and 15] and (1 shl (7 - ((po + 1) and 7))) <> 0);
+      fr := PatternOffset and $FFFF;
+      Level := ($8000 * ((s1 * ($10000 - fr)) + (s2 * fr)) shr 16) - $7FFF;
+      pSmallInt(@FrameBuffer[idx])^ := Level;
+      pSmallInt(@FrameBuffer[idx + 2])^ := Level;
+      PatternOffset := (PatternOffset + nRate) and $7FFFFF;
+      Inc(idx, 4);
+    End;
+
+    If sTimer = 0 Then PatternOffset := 0;
+
+    If dcIn or dcOut Then Begin // Declick
+      Scalar := 0;
+      ScaleInc := 1/44;
+      For idx := 0 to 43 Do Begin
+        If dcIn Then Begin
+          oSample := Round(pSmallInt(@FrameBuffer[idx * 2])^ * Scalar);
+          pSmallInt(@FrameBuffer[idx * 2])^ := oSample;
+        End;
+        If dcOut Then Begin
+          oSample := Round(pSmallInt(@FrameBuffer[BuffSize - ((idx + 1) * 2)])^ * Scalar);
+          pSmallInt(@FrameBuffer[BuffSize - ((idx + 1) * 2)])^ := oSample;
+        End;
+        Scalar := Scalar + ScaleInc;
+      End;
+    End;
+  End Else
+    For Idx := 0 To BuffSize -1 Do
+      FrameBuffer[Idx] := 0;
+  InjectSound(@FrameBuffer[0], Not FullSpeed);
+  LastS := sTimer;
 End;
 
 // Begin Core opcodes
@@ -376,8 +437,19 @@ Begin
 End;
 
 Procedure TXOChipCore.OpF002;
+Var
+  idx: Integer;
 Begin
   // Store 16bytes of audio into the play buffer from I
+  For idx := 0 To 15 Do
+    PatternBuffer[idx] := GetMem(i + idx);
+End;
+
+Procedure TXOChipCore.OpFx18;
+Begin
+  // Fx18 - Sound timer = Reg X
+  sTimer := Regs[(ci Shr 8) And $F];
+  If sTimer = 0 Then PatternOffset := 0;
 End;
 
 Procedure TXOChipCore.OpFx1E;
@@ -390,7 +462,7 @@ End;
 Procedure TXOChipCore.OpFx3A;
 Begin
   // Set pitch register to Regs[x];
-  x := Regs[(ci Shr 8) And $F];
+  PatternPitch := Regs[(ci Shr 8) And $F];
 End;
 
 Procedure TXOChipCore.OpFx55;

@@ -2,7 +2,7 @@ unit Chip8Int;
 
 interface
 
-Uses SysUtils, Types, Classes, Windows, Math, SyncObjs, Core_Def;
+Uses SysUtils, Types, Classes, Windows, Math, SyncObjs, Sound, Core_Def;
 
 Const
 
@@ -195,6 +195,7 @@ Begin
   Core := nil;
   MsgPtr := -1;
   MsgLock := TCriticalSection.Create;
+  FullSpeed := False;
   Inherited;
 End;
 
@@ -305,6 +306,7 @@ Var
 Begin
 
   iPerFrame := Core.ipf;
+  If FullSpeed Then Core.ipf := 0;
   For Idx := 0 To Length(Core.DisplayMem) -1 Do
     DisplayArray[Idx] := Palette[Core.DisplayMem[Idx] And $F];
 

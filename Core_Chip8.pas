@@ -2,7 +2,7 @@ unit Core_Chip8;
 
 interface
 
-Uses Core_Def;
+Uses Core_Def, Sound;
 
 Type
 
@@ -14,6 +14,7 @@ Type
     Procedure Frame(AddCycles: Integer); Virtual;
     Function  GetMem(Address: Integer): Byte; Virtual;
     Procedure WriteMem(Address: Integer; Value: Byte); Virtual;
+    Procedure DoSoundTimer; Virtual;
     Procedure Log(s: String);
 
     Procedure Op0nnn; Virtual; Procedure Op0000; Virtual; Procedure Op00E0; Virtual; Procedure Op00EE; Virtual;
@@ -96,6 +97,10 @@ Begin
   StackPtr := 0;
   mCycles := 0;
   PC := $200;
+
+  MakeSoundBuffers(60, 4);
+  sBuffPos := 0;
+  LastS := 0;
 
   For idx := 0 To Length(Memory) -1 Do
     Memory[Idx] := Random(256);
@@ -181,6 +186,51 @@ Begin
 
 End;
 
+
+Procedure TChip8Core.DoSoundTimer;
+Var
+  idx, sPos: Integer;
+  oSample: Word;
+  dcIn, dcOut: Boolean;
+  Scalar, ScaleInc, t: Double;
+Begin
+  If sTimer > 0 Then Begin
+    Dec(sTimer);
+    dcIn := LastS = 0;
+    dcOut := sTimer = 0;
+    sPos := 0;
+    While sPos < BuffSize Do
+    begin
+      t := sBuffPos * 6.283 / 64;
+      oSample := Round(16384 * (sin(t)+sin(t*3)/3));
+      pWord(@FrameBuffer[sPos])^ := oSample;
+      pWord(@FrameBuffer[sPos + 2])^ := oSample;
+      sBuffPos := sBuffPos + (64 * 1400) div 44100;
+      sBuffPos := sBuffPos mod 64;
+      Inc(sPos, 4);
+    end;
+    If dcIn or dcOut Then Begin // Declick
+      Scalar := 0;
+      ScaleInc := 1/44;
+      For idx := 0 to 43 Do Begin
+        If dcIn Then Begin
+          oSample := Round(pSmallInt(@FrameBuffer[idx * 2])^ * Scalar);
+          pSmallInt(@FrameBuffer[idx * 2])^ := oSample;
+        End;
+        If dcOut Then Begin
+          oSample := Round(pSmallInt(@FrameBuffer[BuffSize - ((idx + 1) * 2)])^ * Scalar);
+          pSmallInt(@FrameBuffer[BuffSize - ((idx + 1) * 2)])^ := oSample;
+        End;
+        Scalar := Scalar + ScaleInc;
+      End;
+    End;
+  End Else
+    For Idx := 0 To BuffSize -1 Do
+      FrameBuffer[Idx] := 0;
+  InjectSound(@FrameBuffer[0], Not FullSpeed);
+  LastS := sTimer;
+End;
+
 Procedure TChip8Core.Frame(AddCycles: Integer);
 Begin
 
@@ -190,12 +240,11 @@ Begin
 
   If mCycles >= NextFrame Then Begin
     If Timer > 0 then Dec(Timer);
-    If sTimer > 0 Then Dec(sTimer);
+    DoSoundTimer;
     If DisplayFlag Then Begin
       DisplayUpdate := True;
       DisplayFlag := False;
     End;
-    WaitForSync;
     Inc(mCycles, 1832 + (Ord(stimer <> 0) * 4) + (Ord(timer <> 0) * 8) - 3668);
     NextFrame := ((mCycles + 2572) div 3668) * 3668 + 1096;
     ExitLoop := True;

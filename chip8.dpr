@@ -10,7 +10,8 @@ uses
   Core_sChipLegacy11 in 'Core_sChipLegacy11.pas',
   Core_sChipLegacy10 in 'Core_sChipLegacy10.pas',
   Core_sChipModern in 'Core_sChipModern.pas',
-  Core_xoChip in 'Core_xoChip.pas';
+  Core_xoChip in 'Core_xoChip.pas',
+  Sound in 'Sound.pas';
 
 {$R *.res}
 

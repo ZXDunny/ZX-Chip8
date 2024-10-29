@@ -68,6 +68,8 @@ implementation
 
 {$R *.dfm}
 
+Uses Sound;
+
 procedure TMainForm.OnAppMessage(var Msg: TMsg; var Handled: Boolean);
 begin
 
@@ -227,6 +229,8 @@ begin
 
   CurrentModel := Chip8_VIP;
   InitDisplay(60, 64, 32, True, DisplayPanel);
+  InitSound;
+
   Application.OnMessage := OnAppMessage;
   SetLength(ModelItems, 5);
   ModelItems[0] := @CosmacVIPChip81;
@@ -244,6 +248,7 @@ begin
   SaveMRUList;
   CloseInterpreter(Interpreter);
   CloseGL;
+  CloseSound;
 
 end;
 

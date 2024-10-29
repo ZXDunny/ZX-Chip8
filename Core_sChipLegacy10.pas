@@ -32,7 +32,7 @@ Type
 
 implementation
 
-Uses Windows, SysUtils, Classes, Math, Chip8Int, Display;
+Uses Windows, SysUtils, Classes, Math, Chip8Int, Display, Sound;
 
 Procedure TSChipLegacy10Core.BuildTables;
 Begin
@@ -72,6 +72,7 @@ Begin
   Inherited;
   hiresMode := False;
   for idx := 0 to 99 Do Memory[idx + 160] := HiresFont10[idx];
+  MakeSoundBuffers(64, 4);
 
 End;
 
@@ -91,13 +92,17 @@ Begin
   Until iCnt >= maxipf;
 
   If Timer > 0 then Dec(Timer);
-  If sTimer > 0 Then Dec(sTimer);
+  DoSoundTimer;
   If DisplayFlag Then Begin
     DisplayUpdate := True;
     DisplayFlag := False;
   End;
-  WaitForSync;
-  ipf := icnt;
+
+  If FullSpeed Then
+    Inc(ipf, icnt)
+  Else Begin
+    ipf := icnt;
+  End;
   icnt := 0;
 
 End;

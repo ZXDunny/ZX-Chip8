@@ -11,7 +11,8 @@ uses
   Core_sChipLegacy10 in 'Core_sChipLegacy10.pas',
   Core_sChipModern in 'Core_sChipModern.pas',
   Core_xoChip in 'Core_xoChip.pas',
-  Sound in 'Sound.pas';
+  Sound in 'Sound.pas',
+  Core_MegaChip in 'Core_MegaChip.pas';
 
 {$R *.res}
 

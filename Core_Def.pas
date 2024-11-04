@@ -2,6 +2,8 @@ unit Core_Def;
 
 interface
 
+Uses Classes;
+
 Type
 
   TOpcode = Procedure of Object;
@@ -12,28 +14,45 @@ Type
     Opcode: pOpcode;
   End;
 
+  TDisplayInfo = Record
+    Data: Pointer;
+    Width, Height, Depth: Integer;
+  End;
+
   TCore = Class
-    Opcodes, Opcodes0, Opcodes5, Opcodes8, OpcodesE, OpcodesF: Array[0..255] of TOpcode;
-    Memory: Array [0..$FFFF] of Byte;
+    Opcodes, Opcodes0, Opcodes5, Opcodes8, OpcodesE, OpcodesF, OpcodesM: Array[0..255] of TOpcode;
+    Memory: Array of Byte;
     Regs: Array[0..15] of Byte;
     Stack: Array[0..1023] of LongWord;
     PC, StackPtr: LongWord;
     ci, cil, Cycles, mCycles, LastFrameCount,
     Timer, sTimer, NextFrame, icnt, i,
-    nnn, LastKey, keyStage: Integer;
+    nnn, keyStage: Integer;
     sBuffPos, LastS: Integer;
     t, x, y, n: Byte;
     ExitLoop: Boolean;
     ipf, maxipf: Integer;
-    DispWidth, DispHeight: Integer;
+    DispWidth, DispHeight, DispDepth: Integer;
     KeyStates: Array[0..15] of Boolean;
-    DisplayMem: Array of Byte;
+    DisplayMem, PresentDisplay: Array of Byte;
+    Function  GetDisplayInfo: TDisplayInfo; Virtual;
     Procedure Reset; Virtual;
     Procedure LoadROM(Filename: String); Virtual;
     Procedure InstructionLoop; Virtual;
+    {$IFDEF DEBUG}
+    Procedure Log(Str: String);
+    {$ENDIF}
   End;
 
+{$IFDEF DEBUG}
+Const
+
+  LogFilename = 'c:\temp\c8log.txt';
+{$ENDIF}
+
 implementation
+
+Uses SysUtils;
 
 Procedure TCore.Reset;
 Begin
@@ -49,5 +68,28 @@ Procedure TCore.InstructionLoop;
 Begin
   //
 End;
+
+Function TCore.GetDisplayInfo: TDisplayInfo;
+Begin
+  //
+End;
+
+{$IFDEF DEBUG}
+Procedure TCore.Log(Str: String);
+var
+  LogFile: TextFile;
+Begin
+  AssignFile(LogFile, LogFileName);
+  Try
+    If FileExists(LogFileName) Then
+      Append(LogFile)
+    Else
+      Rewrite(LogFile);
+    WriteLn(LogFile, Str);
+  Finally
+    CloseFile(LogFile);
+  End;
+End;
+{$ENDIF}
 
 end.

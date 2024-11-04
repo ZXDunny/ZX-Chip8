@@ -2,7 +2,7 @@ unit Display;
 
 interface
 
-Uses Windows, Controls, ExtCtrls, Forms, Graphics, dglOpenGL;
+Uses Windows, Controls, ExtCtrls, Forms, Graphics, SyncObjs, dglOpenGL;
 
 Procedure InitGL(Handle: hWnd);
 Procedure InitDisplay(FPS, DisplayWidth, DisplayHeight: Integer; Aspect: Boolean; Var Control: TPanel);
@@ -29,6 +29,7 @@ Var
   bStyle: TFormBorderStyle;
   BackRed, BackGreen, BackBlue: Single;
   GLPanel: ^TPanel;
+  DisplayLock: TCriticalSection;
 
 implementation
 
@@ -176,7 +177,7 @@ Begin
   GLX := 0; GLY := 0; GLW := DisplayWidth; GLH := DisplayHeight;
   MaintainAspect := Aspect;
 
-  SetLength(DisplayArray, DisplayWidth * SizeOf(LongWord) * DisplayHeight);
+  SetLength(DisplayArray, DisplayWidth * DisplayHeight);
   intWidth := DisplayWidth;
   intHeight := DisplayHeight;
   InitGL(GLPanel^.Handle);
@@ -380,5 +381,13 @@ Begin
   Until Not DisplayUpdate;
 
 End;
+
+Initialization
+
+  DisplayLock := TCriticalSection.Create;
+
+Finalization
+
+  DisplayLock.Free;
 
 end.

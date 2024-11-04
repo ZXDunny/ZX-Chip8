@@ -57,36 +57,6 @@ object MainForm: TMainForm
       Caption = 'File'
       object Chip8Model1: TMenuItem
         Caption = 'Chip8 Model'
-        object CosmacVIPChip81: TMenuItem
-          Caption = 'Cosmac VIP (Chip8)'
-          Checked = True
-          RadioItem = True
-          OnClick = CosmacVIPChip81Click
-        end
-        object SChip101: TMenuItem
-          Tag = 1
-          Caption = 'Legacy SChip 1.0'
-          RadioItem = True
-          OnClick = CosmacVIPChip81Click
-        end
-        object SChip111: TMenuItem
-          Tag = 2
-          Caption = 'Legacy SChip 1.1'
-          RadioItem = True
-          OnClick = CosmacVIPChip81Click
-        end
-        object ModernSChip1: TMenuItem
-          Tag = 3
-          Caption = 'Modern SChip'
-          RadioItem = True
-          OnClick = CosmacVIPChip81Click
-        end
-        object XOChip1: TMenuItem
-          Tag = 4
-          Caption = 'XO-Chip'
-          RadioItem = True
-          OnClick = CosmacVIPChip81Click
-        end
       end
       object N2: TMenuItem
         Caption = '-'

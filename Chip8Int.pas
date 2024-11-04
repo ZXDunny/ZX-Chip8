@@ -11,6 +11,7 @@ Const
   Chip8_SChip_Legacy11 = 2;
   Chip8_SChip_Modern   = 3;
   Chip8_XOChip         = 4;
+  Chip8_MegaChip       = 5;
 
   IntMsg_Pause         = 0;
   IntMsg_Resume        = 1;
@@ -103,7 +104,7 @@ Const
 
 implementation
 
-Uses Display, Core_Chip8, Core_sChipLegacy10, Core_sChipLegacy11, Core_sChipModern, Core_xoChip;
+Uses Display, Core_Chip8, Core_sChipLegacy10, Core_sChipLegacy11, Core_sChipModern, Core_xoChip, Core_MegaChip;
 
 // Message queue handling
 
@@ -159,6 +160,8 @@ Begin
               Core := TSChipModernCore.Create;
             Chip8_XOChip:
               Core := TXOChipCore.Create;
+            Chip8_MegaChip:
+              Core := TMegaChipCore.Create;
           End;
           CoreType := MsgQueue[0].PayLoadI;
           Core.Reset;
@@ -303,12 +306,33 @@ End;
 Procedure TChip8Interpreter.Render;
 Var
   Idx: Integer;
+  RenderInfo: TDisplayInfo;
+  Src: pByte;
 Begin
 
   iPerFrame := Core.ipf;
   If FullSpeed Then Core.ipf := 0;
-  For Idx := 0 To Length(Core.DisplayMem) -1 Do
-    DisplayArray[Idx] := Palette[Core.DisplayMem[Idx] And $F];
+
+  DisplayLock.Enter;
+
+  RenderInfo := Core.GetDisplayInfo;
+
+  Case RenderInfo.Depth of
+    8: // Chip8, sChip and XO-Chip
+      Begin
+        Src := RenderInfo.Data;
+        For Idx := 0 To Length(DisplayArray) -1 Do Begin
+          DisplayArray[Idx] := Palette[Src^ And $F];
+          Inc(Src);
+        End;
+      End;
+    32: // Mega-Chip
+      Begin
+        CopyMemory(@DisplayArray[0], RenderInfo.Data, RenderInfo.Width * RenderInfo.Height * SizeOf(LongWord));
+      End;
+  End;
+
+  DisplayLock.Leave;
 
 End;
 

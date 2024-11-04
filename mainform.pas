@@ -21,11 +21,6 @@ type
     menuRecentfiles: TMenuItem;
     N2: TMenuItem;
     Chip8Model1: TMenuItem;
-    CosmacVIPChip81: TMenuItem;
-    SChip101: TMenuItem;
-    SChip111: TMenuItem;
-    XOChip1: TMenuItem;
-    ModernSChip1: TMenuItem;
     procedure FormCreate(Sender: TObject);
     procedure FormKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);
     procedure FormShow(Sender: TObject);
@@ -41,6 +36,7 @@ type
     { Private declarations }
     MaxIPF: Integer;
     MRUList: TStringlist;
+    procedure FormMove(var Msg: TMessage); message WM_MOVING;
     procedure OnAppMessage(var Msg: TMsg; var Handled: Boolean);
     procedure CMDialogKey(var msg: TCMDialogKey);  message CM_DIALOGKEY;
   public
@@ -58,17 +54,27 @@ var
   Main: TMainForm;
   CurrentModel: Integer;
   Interpreter: TChip8Interpreter;
-  ModelItems: Array of ^TMenuItem;
 
 Const
 
-  ModelNames: Array[0..4] of String = ('VIP', 'SChip1.0', 'SChip1.1', 'SChip Modern', 'XO-Chip');
+  MaxModels = 6;
+  ModelNames:     Array[0..MaxModels -1] of String = ('VIP', 'SChip1.0', 'SChip1.1', 'SChip Modern', 'XO-Chip', 'MegaChip');
+  ModelLongNames: Array[0..MaxModels -1] of String = ('Cosmac VIP (Chip8)', 'Legacy SChip 1.0', 'Legacy SChip 1.1', 'Modern SChip', 'XO-Chip', 'MegaChip');
 
 implementation
 
 {$R *.dfm}
 
 Uses Sound;
+
+procedure TMainForm.FormMove(var Msg: TMessage);
+Begin
+
+  // Ensures the animation will display correctly during window move operations
+
+  If Assigned(Interpreter) Then DisplayTimerTimer(nil);
+
+End;
 
 procedure TMainForm.OnAppMessage(var Msg: TMsg; var Handled: Boolean);
 begin
@@ -77,7 +83,7 @@ begin
     WM_SYSCHAR:
       Handled := True;
     WM_KEYDOWN:
-      begin
+      begin // Remove key repeats
         if (Msg.lParam shr 30) = 1 then begin
           Handled := True;
         end else
@@ -120,20 +126,23 @@ Procedure TMainForm.SetModel(Model: Integer);
 Var
   i: Integer;
 Begin
+
   PauseInterpreter(interpreter);
   CurrentModel := Model;
   Interpreter.SetCore(CurrentModel);
   InitDisplay(60, Interpreter.Core.DispWidth, Interpreter.Core.DispHeight, True, DisplayPanel);
-  For i := 0 To Length(ModelItems) -1 Do
-    If ModelItems[i]^.Tag = CurrentModel Then
-      ModelItems[i]^.Checked := True;
+  For i := 0 To Chip8Model1.Count -1 Do
+    If Chip8Model1.Items[i].Tag = CurrentModel Then
+      Chip8Model1.Items[i].Checked := True;
   ResumeInterpreter(interpreter);
+
 End;
 
 procedure TMainForm.CosmacVIPChip81Click(Sender: TObject);
 begin
+
   SetModel((Sender as TMenuItem).Tag);
-  (Sender as TMenuItem).Checked := True;
+
 end;
 
 procedure TMainForm.FormKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);
@@ -143,7 +152,7 @@ const
 {$J-}
 begin
 
-  If (Key = VK_RETURN) and (ssAlt in Shift) Then Begin
+  If (Key = VK_RETURN) and (ssAlt in Shift) Then Begin // Trap Alt+Enter for fullscreen flip
     If FullScreen Then Begin
       DisplayPanel.Align := alNone;
       Self.Menu := MainMenu;
@@ -225,6 +234,9 @@ begin
 end;
 
 procedure TMainForm.FormCreate(Sender: TObject);
+Var
+  i: Integer;
+  mi: TMenuItem;
 begin
 
   CurrentModel := Chip8_VIP;
@@ -232,12 +244,17 @@ begin
   InitSound;
 
   Application.OnMessage := OnAppMessage;
-  SetLength(ModelItems, 5);
-  ModelItems[0] := @CosmacVIPChip81;
-  ModelItems[1] := @SChip101;
-  ModelItems[2] := @SChip111;
-  ModelItems[3] := @ModernSChip1;
-  ModelItems[4] := @XOChip1;
+
+  For i := 0 To High(ModelNames) Do Begin
+    mi := TMenuItem.Create(Chip8Model1);
+    mi.Caption := ModelLongNames[i];
+    mi.Tag := i;
+    mi.RadioItem := True;
+    mi.Checked := i = 0;
+    mi.OnClick := CosmacVIPChip81Click;
+    Chip8Model1.Add(mi);
+  End;
+
   LoadMRUList;
 
 end;
@@ -256,7 +273,10 @@ Procedure TMainForm.LoadROM(Filename: String);
 Begin
 
   If ExtractFileExt(Filename) = '.xo8' Then
-    SetModel(Chip8_XOChip);
+    SetModel(Chip8_XOChip)
+  Else
+    If ExtractFileExt(Filename) = '.mc8' Then
+      SetModel(Chip8_MegaChip);
 
   Interpreter.LoadROM(Filename);
   AddToMRUList(Filename);
@@ -327,7 +347,5 @@ begin
   LoadROM(MRUList[(Sender as TMenuItem).Tag]);
 
 end;
-
-
 
 end.

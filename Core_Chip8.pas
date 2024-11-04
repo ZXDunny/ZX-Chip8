@@ -2,11 +2,13 @@ unit Core_Chip8;
 
 interface
 
-Uses Core_Def, Sound;
+Uses SyncObjs, Core_Def, Sound;
 
 Type
 
   TChip8Core = Class(TCore)
+    Function  GetDisplayInfo: TDisplayInfo; Override;
+    Procedure SetDisplay(Width, Height, Depth: Integer);
     Procedure BuildTables; Virtual;
     Procedure Reset; Override;
     Procedure LoadROM(Filename: String); Override;
@@ -15,7 +17,6 @@ Type
     Function  GetMem(Address: Integer): Byte; Virtual;
     Procedure WriteMem(Address: Integer; Value: Byte); Virtual;
     Procedure DoSoundTimer; Virtual;
-    Procedure Log(s: String);
 
     Procedure Op0nnn; Virtual; Procedure Op0000; Virtual; Procedure Op00E0; Virtual; Procedure Op00EE; Virtual;
     Procedure Op1nnn; Virtual; Procedure Op2nnn; Virtual; Procedure Op3xnn; Virtual; Procedure Op4xnn; Virtual;
@@ -33,13 +34,38 @@ implementation
 
 Uses Windows, SysUtils, Classes, Math, Chip8Int, Display;
 
+Function TChip8Core.GetDisplayInfo: TDisplayInfo;
+Begin
+
+  DisplayLock.Enter;
+
+  With Result Do Begin
+    Data := @PresentDisplay[0];
+    Width := DispWidth;
+    Height := DispHeight;
+    Depth := DispDepth;
+  End;
+
+  DisplayLock.Leave;
+
+End;
+
+Procedure TChip8Core.SetDisplay(Width, Height, Depth: Integer);
+Begin
+
+  SetLength(DisplayMem, Width * Height);
+  SetLength(PresentDisplay, Length(DisplayMem));
+  DispWidth := Width; DispHeight := Height;
+  DispDepth := Depth;
+
+End;
+
 Procedure TChip8Core.BuildTables;
 Var
   idx: Integer;
 Begin
 
-  SetLength(DisplayMem, 64 * 32);
-  DispWidth := 64; DispHeight := 32;
+  SetDisplay(64, 32, 8);
 
   For idx := 0 To 255 Do Begin
     Opcodes[idx]  := Op0000;
@@ -48,6 +74,7 @@ Begin
     Opcodes8[idx] := Op0000;
     OpcodesE[idx] := Op0000;
     OpcodesF[idx] := Op0000;
+    OpcodesM[idx] := Op0000;
   End;
 
   Opcodes[0]  := Op0nnn; Opcodes[1]  := Op1nnn; Opcodes[2]  := Op2nnn; Opcodes[3]  := Op3xnn;
@@ -58,7 +85,7 @@ Begin
   Opcodes0[$E0] := Op00E0; Opcodes0[$EE] := Op00EE;
 
   Opcodes8[0]  := Op8xy0; Opcodes8[1] := Op8xy1; Opcodes8[2] := Op8xy2; Opcodes8[3]  := Op8xy3;
-  Opcodes8[4]  := Op8xy4; Opcodes8[5] := Op8xy5; Opcodes8[6] := Op8xy6; Opcodes8[7] := Op8xy7;
+  Opcodes8[4]  := Op8xy4; Opcodes8[5] := Op8xy5; Opcodes8[6] := Op8xy6; Opcodes8[7]  := Op8xy7;
   Opcodes8[$E] := Op8xyE;
 
   OpcodesE[$9E] := OpEx9E; OpcodesE[$A1] := OpExA1;
@@ -92,6 +119,11 @@ var
   idx: Integer;
 Begin
 
+  {$IFDEF DEBUG}
+  If FileExists(LogFilename) Then
+    DeleteFile(LogFilename);
+  {$ENDIF}
+
   icnt := 0;
   LastFrameCount := 0;
   StackPtr := 0;
@@ -102,6 +134,7 @@ Begin
   sBuffPos := 0;
   LastS := 0;
 
+  SetLength(Memory, $FFFF);
   For idx := 0 To Length(Memory) -1 Do
     Memory[Idx] := Random(256);
 
@@ -135,7 +168,7 @@ Begin
 
     Reset;
 
-    for idx := 0 to High(bin) do
+    for idx := 0 to Min(High(bin), High(Memory)) do
       Memory[idx + 512] := bin[idx];
 
     PC := 512;
@@ -143,22 +176,6 @@ Begin
     NextFrame := 3668;
 
   End;
-
-End;
-
-Procedure TChip8Core.Log(s: String);
-Var
-  LogFile: TStringlist;
-Const
-  LogFilename = 'c:\temp\c8Log.txt';
-Begin
-
-  LogFile := TStringList.Create;
-  If FileExists(LogFilename) Then
-    LogFile.LoadFromFile(LogFilename);
-  LogFile.Add(s);
-  LogFile.SaveToFile(LogFilename);
-  LogFile.Free;
 
 End;
 
@@ -186,21 +203,20 @@ Begin
 
 End;
 
-
 Procedure TChip8Core.DoSoundTimer;
 Var
   idx, sPos: Integer;
   oSample: Word;
   dcIn, dcOut: Boolean;
-  Scalar, ScaleInc, t: Double;
+  t: Double;
 Begin
+  // If Sound Timer > 0 then generate a tone.
   If sTimer > 0 Then Begin
     Dec(sTimer);
     dcIn := LastS = 0;
     dcOut := sTimer = 0;
     sPos := 0;
-    While sPos < BuffSize Do
-    begin
+    While sPos < BuffSize Do Begin
       t := sBuffPos * 6.283 / 64;
       oSample := Round(16384 * (sin(t)+sin(t*3)/3));
       pWord(@FrameBuffer[sPos])^ := oSample;
@@ -209,25 +225,10 @@ Begin
       sBuffPos := sBuffPos mod 64;
       Inc(sPos, 4);
     end;
-    If dcIn or dcOut Then Begin // Declick
-      Scalar := 0;
-      ScaleInc := 1/44;
-      For idx := 0 to 43 Do Begin
-        If dcIn Then Begin
-          oSample := Round(pSmallInt(@FrameBuffer[idx * 2])^ * Scalar);
-          pSmallInt(@FrameBuffer[idx * 2])^ := oSample;
-        End;
-        If dcOut Then Begin
-          oSample := Round(pSmallInt(@FrameBuffer[BuffSize - ((idx + 1) * 2)])^ * Scalar);
-          pSmallInt(@FrameBuffer[BuffSize - ((idx + 1) * 2)])^ := oSample;
-        End;
-        Scalar := Scalar + ScaleInc;
-      End;
-    End;
+    DeClick(dcIn, dcOut);
   End Else
     For Idx := 0 To BuffSize -1 Do
       FrameBuffer[Idx] := 0;
-  InjectSound(@FrameBuffer[0], Not FullSpeed);
   LastS := sTimer;
 End;
 
@@ -242,9 +243,13 @@ Begin
     If Timer > 0 then Dec(Timer);
     DoSoundTimer;
     If DisplayFlag Then Begin
+      DisplayLock.Enter;
+      CopyMemory(@PresentDisplay[0], @DisplayMem[0], DispWidth * DispHeight);
       DisplayUpdate := True;
       DisplayFlag := False;
+      DisplayLock.Leave;
     End;
+    InjectSound(@FrameBuffer[0], Not FullSpeed);
     Inc(mCycles, 1832 + (Ord(stimer <> 0) * 4) + (Ord(timer <> 0) * 8) - 3668);
     NextFrame := ((mCycles + 2572) div 3668) * 3668 + 1096;
     ExitLoop := True;
@@ -565,12 +570,11 @@ Begin
           If KeyStates[idx] Then Begin
             Regs[(ci Shr 8) And $F] := idx;
             keyStage := 2;
-            LastKey := Idx;
             Break;
           End;
       End;
     2:
-      If Not KeyStates[LastKey] Then Begin
+      If Not KeyStates[Regs[(ci Shr 8) And $F]] Then Begin
         KeyStage := 0;
         Inc(PC, 2);
         Cycles := 8;

@@ -40,12 +40,11 @@ Begin
   Inherited;
 
   maxipf := 30;
-  SetLength(DisplayMem, 128 * 64);
-  DispWidth := 128; DispHeight := 64;
+  SetDisplay(128, 64, 8);
 
-  Opcodes[3] := Op3xnn; Opcodes[11] := OpBnnn; Opcodes[13] := OpDxyn; Opcodes[15] := OpFxnn;
+  Opcodes[3]    := Op3xnn; Opcodes[11]   := OpBnnn; Opcodes[$D]   := OpDxyn; Opcodes[15]   := OpFxnn;
   Opcodes0[$E0] := Op00E0; Opcodes0[$FD] := Op00FD; Opcodes0[$FE] := Op00FE; Opcodes0[$FF] := Op00FF;
-  Opcodes8[1] := Op8xy1; Opcodes8[2] := Op8xy2; Opcodes8[3] := Op8xy3; Opcodes8[6] := Op8xy6; Opcodes8[$E] := Op8xyE;
+  Opcodes8[1]   := Op8xy1; Opcodes8[2]   := Op8xy2; Opcodes8[3]   := Op8xy3; Opcodes8[6]   := Op8xy6; Opcodes8[$E]  := Op8xyE;
   OpcodesF[$29] := OpFx29; OpcodesF[$55] := OpFx55; OpcodesF[$65] := OpFx65; OpcodesF[$75] := OpFx75; OpcodesF[$85] := OpFx85;
 
 End;
@@ -93,10 +92,14 @@ Begin
 
   If Timer > 0 then Dec(Timer);
   DoSoundTimer;
+
   If DisplayFlag Then Begin
+    CopyMemory(@PresentDisplay[0], @DisplayMem[0], DispWidth * DispHeight);
     DisplayUpdate := True;
     DisplayFlag := False;
   End;
+
+  InjectSound(@FrameBuffer[0], Not FullSpeed);
 
   If FullSpeed Then
     Inc(ipf, icnt)

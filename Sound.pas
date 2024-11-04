@@ -9,6 +9,7 @@ Procedure InjectSound(ReadBuffer: pByte; WaitForSync: Boolean);
 Function  MakeSoundBuffers(Hz: Integer; NumBuffers: Integer): Integer;
 Procedure StopSound;
 Procedure CloseSound;
+Procedure DeClick(dcIn, dcOut: Boolean);
 
 Var
 
@@ -134,6 +135,31 @@ Begin
 
   StopSound;
   BASS_Free;
+
+End;
+
+Procedure DeClick(dcIn, dcOut: Boolean);
+Var
+  idx: Integer;
+  oSample: SmallInt;
+  Scalar, ScaleInc: Double;
+Begin
+
+  If dcIn or dcOut Then Begin
+    Scalar := 0;
+    ScaleInc := 1/44;
+    For idx := 0 to 43 Do Begin
+      If dcIn Then Begin
+        oSample := Round(pSmallInt(@FrameBuffer[idx * 2])^ * Scalar);
+        pSmallInt(@FrameBuffer[idx * 2])^ := oSample;
+      End;
+      If dcOut Then Begin
+        oSample := Round(pSmallInt(@FrameBuffer[BuffSize - ((idx + 1) * 2)])^ * Scalar);
+        pSmallInt(@FrameBuffer[BuffSize - ((idx + 1) * 2)])^ := oSample;
+      End;
+      Scalar := Scalar + ScaleInc;
+    End;
+  End;
 
 End;
 

@@ -107,9 +107,7 @@ End;
 
 Procedure TXOChipCore.DoSoundTimer;
 Var
-  oSample: SmallInt;
   dcIn, dcOut: Boolean;
-  Scalar, ScaleInc: Double;
   idx, s1, s2, po, Level, nRate, fr: Integer;
 Begin
   If sTimer > 0 Then Begin
@@ -136,25 +134,11 @@ Begin
 
     If sTimer = 0 Then PatternOffset := 0;
 
-    If dcIn or dcOut Then Begin // Declick
-      Scalar := 0;
-      ScaleInc := 1/44;
-      For idx := 0 to 43 Do Begin
-        If dcIn Then Begin
-          oSample := Round(pSmallInt(@FrameBuffer[idx * 2])^ * Scalar);
-          pSmallInt(@FrameBuffer[idx * 2])^ := oSample;
-        End;
-        If dcOut Then Begin
-          oSample := Round(pSmallInt(@FrameBuffer[BuffSize - ((idx + 1) * 2)])^ * Scalar);
-          pSmallInt(@FrameBuffer[BuffSize - ((idx + 1) * 2)])^ := oSample;
-        End;
-        Scalar := Scalar + ScaleInc;
-      End;
-    End;
+    DeClick(dcIn, dcOut);
+
   End Else
     For Idx := 0 To BuffSize -1 Do
       FrameBuffer[Idx] := 0;
-  InjectSound(@FrameBuffer[0], Not FullSpeed);
   LastS := sTimer;
 End;
 
@@ -455,7 +439,6 @@ End;
 Procedure TXOChipCore.OpFx1E;
 Begin
   // Fx1E - Index += Reg X
-  t := i Shr 8;
   i := (i + Regs[(ci Shr 8) And $F]) And $FFFF;
 End;
 

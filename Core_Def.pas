@@ -27,18 +27,22 @@ Type
     PC, StackPtr: LongWord;
     ci, cil, Cycles, mCycles, LastFrameCount,
     Timer, sTimer, NextFrame, icnt, i,
-    nnn, keyStage: Integer;
-    sBuffPos, LastS: Integer;
+    nnn, keyStage, LastS: Integer;
+    sBuffPos: Double;
     t, x, y, n: Byte;
     ExitLoop: Boolean;
     ipf, maxipf: Integer;
     DispWidth, DispHeight, DispDepth: Integer;
     KeyStates: Array[0..15] of Boolean;
     DisplayMem, PresentDisplay: Array of Byte;
+    BuzzerTone: Double;
     Function  GetDisplayInfo: TDisplayInfo; Virtual;
     Procedure Reset; Virtual;
     Procedure LoadROM(Filename: String); Virtual;
     Procedure InstructionLoop; Virtual;
+    Procedure KeyDown(Key: Integer); Virtual;
+    Procedure KeyUp(Key: Integer); Virtual;
+    Procedure Present; Virtual;
     {$IFDEF DEBUG}
     Procedure Log(Str: String);
     {$ENDIF}
@@ -69,7 +73,22 @@ Begin
   //
 End;
 
-Function TCore.GetDisplayInfo: TDisplayInfo;
+Function  TCore.GetDisplayInfo: TDisplayInfo;
+Begin
+  //
+End;
+
+Procedure TCore.Present;
+Begin
+  //
+End;
+
+Procedure TCore.KeyDown(Key: Integer);
+Begin
+  //
+End;
+
+Procedure TCore.KeyUp(Key: Integer);
 Begin
   //
 End;

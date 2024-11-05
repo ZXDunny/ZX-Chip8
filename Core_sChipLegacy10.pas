@@ -93,11 +93,7 @@ Begin
   If Timer > 0 then Dec(Timer);
   DoSoundTimer;
 
-  If DisplayFlag Then Begin
-    CopyMemory(@PresentDisplay[0], @DisplayMem[0], DispWidth * DispHeight);
-    DisplayUpdate := True;
-    DisplayFlag := False;
-  End;
+  If DisplayFlag Then Present;
 
   InjectSound(@FrameBuffer[0], Not FullSpeed);
 

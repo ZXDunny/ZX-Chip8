@@ -2,7 +2,7 @@ unit Core_MegaChip;
 
 interface
 
-Uses Core_Def, Core_sChipLegacy11;
+Uses SyncObjs, Core_Def, Core_sChipLegacy11;
 
 Type
 
@@ -27,7 +27,7 @@ Type
     Procedure InstructionLoop; Override;
     Procedure BuildTables; Override;
     Procedure Reset; Override;
-    Procedure Present;
+    Procedure Present; Override;
     Function  GetMem(Address: Integer): Byte; Override;
     Procedure WriteMem(Address: Integer; Value: Byte); Override;
     Function  AlphaBlend(rgb1, rgb2: LongWord; t: Byte): Longword; inline;
@@ -233,6 +233,8 @@ Begin
 
   // Prepare the display for update.
 
+  DisplayLock.Enter;
+
   If Not MegaChipMode Then Begin
     FillMemory(@PresentDisplay[0], 256 * 192 * 4, 0);
     src := @DisplayMem[0];
@@ -257,6 +259,8 @@ Begin
     DisplayUpdate := True;
     CurBuffer := 1 - CurBuffer;
   End;
+
+  DisplayLock.Leave;
 
 End;
 
@@ -287,12 +291,15 @@ Var
   oSample: Word;
   dcIn, dcOut: Boolean;
   pSample: SmallInt;
-  t: Double;
+  t, StepSize: Double;
 
   Function Mix(SampleA, SampleB: SmallInt): SmallInt;
   Begin
     Result := SmallInt((SampleA + SampleB) - SampleA * SampleB * Sign(SampleA + SampleB));
   End;
+
+Const
+  CycleLength = 1024;
 
 Begin
   // If Sound Timer > 0 then generate a tone.
@@ -301,13 +308,15 @@ Begin
     dcIn := LastS = 0;
     dcOut := sTimer = 0;
     sPos := 0;
+    stepSize := (BuzzerTone * CycleLength) / 44100;
     While sPos < BuffSize Do Begin
-      t := sBuffPos * 6.283 / 64;
-      oSample := Round(16384 * (sin(t)+sin(t*3)/3));
+      t := sBuffPos * 6.283 / CycleLength;
+      oSample := Round(16384 * (sin(t) + sin(t * 3) / 3));
       pWord(@FrameBuffer[sPos])^ := oSample;
       pWord(@FrameBuffer[sPos + 2])^ := oSample;
-      sBuffPos := sBuffPos + (64 * 1400) div 44100;
-      sBuffPos := sBuffPos mod 64;
+      sBuffPos := sBuffPos + stepSize;
+      if sBuffPos >= CycleLength then
+        sBuffPos := sBuffPos - CycleLength;
       Inc(sPos, 4);
     end;
     DeClick(dcIn, dcOut);

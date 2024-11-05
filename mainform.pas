@@ -57,9 +57,9 @@ var
 
 Const
 
-  MaxModels = 6;
-  ModelNames:     Array[0..MaxModels -1] of String = ('VIP', 'SChip1.0', 'SChip1.1', 'SChip Modern', 'XO-Chip', 'MegaChip');
-  ModelLongNames: Array[0..MaxModels -1] of String = ('Cosmac VIP (Chip8)', 'Legacy SChip 1.0', 'Legacy SChip 1.1', 'Modern SChip', 'XO-Chip', 'MegaChip');
+  MaxModels = 8;
+  ModelNames:     Array[0..MaxModels -1] of String = ('VIP', 'Chip8x', 'Chip-48', 'SChip1.0', 'SChip1.1', 'SChip Modern', 'XO-Chip', 'MegaChip');
+  ModelLongNames: Array[0..MaxModels -1] of String = ('Cosmac VIP (Chip8)', 'Chip8X', 'Chip-48', 'Legacy SChip 1.0', 'Legacy SChip 1.1', 'Modern SChip', 'XO-Chip', 'MegaChip');
 
 implementation
 
@@ -276,7 +276,10 @@ Begin
     SetModel(Chip8_XOChip)
   Else
     If ExtractFileExt(Filename) = '.mc8' Then
-      SetModel(Chip8_MegaChip);
+      SetModel(Chip8_MegaChip)
+    Else
+      If ExtractFileExt(Filename) = '.c8x' Then
+        SetModel(Chip8_Chip8x);
 
   Interpreter.LoadROM(Filename);
   AddToMRUList(Filename);

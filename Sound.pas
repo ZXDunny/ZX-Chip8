@@ -72,7 +72,7 @@ Begin
   // Allocate a buffer of (num) buffers, each of which are one frame in length at the specified framerate (Hz)
   // Not to be confused with video frame rates! Video can update independently of the emulation.
 
-  BuffSize := Trunc((44100 / Hz) * 2 * 2);
+  BuffSize := Trunc(44100 / Hz) * 2 * 2;
   BuffCount := NumBuffers;
   Len := BuffSize * BuffCount;
   SetLength(AudioBuffer, Len);

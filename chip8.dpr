@@ -12,7 +12,9 @@ uses
   Core_sChipModern in 'Core_sChipModern.pas',
   Core_xoChip in 'Core_xoChip.pas',
   Sound in 'Sound.pas',
-  Core_MegaChip in 'Core_MegaChip.pas';
+  Core_MegaChip in 'Core_MegaChip.pas',
+  Core_Chip48 in 'Core_Chip48.pas',
+  Core_Chip8x in 'Core_Chip8x.pas';
 
 {$R *.res}
 

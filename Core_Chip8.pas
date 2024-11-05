@@ -17,6 +17,9 @@ Type
     Function  GetMem(Address: Integer): Byte; Virtual;
     Procedure WriteMem(Address: Integer; Value: Byte); Virtual;
     Procedure DoSoundTimer; Virtual;
+    Procedure KeyDown(Key: Integer); Override;
+    Procedure KeyUp(Key: Integer); Override;
+    Procedure Present; Override;
 
     Procedure Op0nnn; Virtual; Procedure Op0000; Virtual; Procedure Op00E0; Virtual; Procedure Op00EE; Virtual;
     Procedure Op1nnn; Virtual; Procedure Op2nnn; Virtual; Procedure Op3xnn; Virtual; Procedure Op4xnn; Virtual;
@@ -30,9 +33,51 @@ Type
     Procedure OpFx33; Virtual; Procedure OpFx55; Virtual; Procedure OpFx65; Virtual;
   End;
 
+Const
+
+  KeyCodes: Array[0..$F] of Char =
+    ('X', '1', '2', '3',
+     'Q', 'W', 'E', 'A',
+     'S', 'D', 'Z', 'C',
+     '4', 'R', 'F', 'V');
+
+
 implementation
 
 Uses Windows, SysUtils, Classes, Math, Chip8Int, Display;
+
+Procedure TChip8Core.KeyDown(Key: Integer);
+Var
+  idx: Integer;
+Begin
+
+  For idx := 0 To 15 Do
+    If Key = Ord(KeyCodes[idx]) Then
+      KeyStates[idx] := True;
+
+End;
+
+Procedure TChip8Core.KeyUp(Key: Integer);
+Var
+  idx: Integer;
+Begin
+
+  For idx := 0 To 15 Do
+    If Key = Ord(KeyCodes[idx]) Then
+      KeyStates[idx] := False;
+
+End;
+
+Procedure TChip8Core.Present;
+Begin
+
+  DisplayLock.Enter;
+  CopyMemory(@PresentDisplay[0], @DisplayMem[0], DispWidth * DispHeight);
+  DisplayUpdate := True;
+  DisplayFlag := False;
+  DisplayLock.Leave;
+
+End;
 
 Function TChip8Core.GetDisplayInfo: TDisplayInfo;
 Begin
@@ -131,6 +176,7 @@ Begin
   PC := $200;
 
   MakeSoundBuffers(60, 4);
+  BuzzerTone := 1400;
   sBuffPos := 0;
   LastS := 0;
 
@@ -208,7 +254,9 @@ Var
   idx, sPos: Integer;
   oSample: Word;
   dcIn, dcOut: Boolean;
-  t: Double;
+  t, StepSize: Double;
+Const
+  CycleLength = 1024;
 Begin
   // If Sound Timer > 0 then generate a tone.
   If sTimer > 0 Then Begin
@@ -216,13 +264,13 @@ Begin
     dcIn := LastS = 0;
     dcOut := sTimer = 0;
     sPos := 0;
+    stepSize := (BuzzerTone * CycleLength) / 44100;
     While sPos < BuffSize Do Begin
-      t := sBuffPos * 6.283 / 64;
-      oSample := Round(16384 * (sin(t)+sin(t*3)/3));
+      t := sBuffPos * 6.283 / CycleLength;
+      oSample := Round(16384 * (Sin(t) + Sin(t * 3) / 3));
       pWord(@FrameBuffer[sPos])^ := oSample;
       pWord(@FrameBuffer[sPos + 2])^ := oSample;
-      sBuffPos := sBuffPos + (64 * 1400) div 44100;
-      sBuffPos := sBuffPos mod 64;
+      sBuffPos := FMod(sBuffPos + stepSize, CycleLength);
       Inc(sPos, 4);
     end;
     DeClick(dcIn, dcOut);
@@ -242,13 +290,7 @@ Begin
   If mCycles >= NextFrame Then Begin
     If Timer > 0 then Dec(Timer);
     DoSoundTimer;
-    If DisplayFlag Then Begin
-      DisplayLock.Enter;
-      CopyMemory(@PresentDisplay[0], @DisplayMem[0], DispWidth * DispHeight);
-      DisplayUpdate := True;
-      DisplayFlag := False;
-      DisplayLock.Leave;
-    End;
+    If DisplayFlag Then Present;
     InjectSound(@FrameBuffer[0], Not FullSpeed);
     Inc(mCycles, 1832 + (Ord(stimer <> 0) * 4) + (Ord(timer <> 0) * 8) - 3668);
     NextFrame := ((mCycles + 2572) div 3668) * 3668 + 1096;

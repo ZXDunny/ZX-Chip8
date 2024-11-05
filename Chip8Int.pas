@@ -7,11 +7,13 @@ Uses SysUtils, Types, Classes, Windows, Math, SyncObjs, Sound, Core_Def;
 Const
 
   Chip8_VIP            = 0;
-  Chip8_SChip_Legacy10 = 1;
-  Chip8_SChip_Legacy11 = 2;
-  Chip8_SChip_Modern   = 3;
-  Chip8_XOChip         = 4;
-  Chip8_MegaChip       = 5;
+  Chip8_Chip8x         = 1;
+  Chip8_Chip48         = 2;
+  Chip8_SChip_Legacy10 = 3;
+  Chip8_SChip_Legacy11 = 4;
+  Chip8_SChip_Modern   = 5;
+  Chip8_XOChip         = 6;
+  Chip8_MegaChip       = 7;
 
   IntMsg_Pause         = 0;
   IntMsg_Resume        = 1;
@@ -39,12 +41,6 @@ Type
     MsgPtr: Integer;
     MsgLock: TCriticalSection;
     Paused, Finished: Boolean;
-  Const
-    KeyCodes: Array[0..$F] of Char =
-      ('X', '1', '2', '3',
-       'Q', 'W', 'E', 'A',
-       'S', 'D', 'Z', 'C',
-       '4', 'R', 'F', 'V');
     Constructor Create(CreateSuspended: Boolean = False);
     Procedure SetCore(NewCoreType: TChip8CoreType);
     Procedure Execute; Override;
@@ -104,7 +100,7 @@ Const
 
 implementation
 
-Uses Display, Core_Chip8, Core_sChipLegacy10, Core_sChipLegacy11, Core_sChipModern, Core_xoChip, Core_MegaChip;
+Uses Display, Core_Chip8, Core_Chip8x, Core_Chip48, Core_sChipLegacy10, Core_sChipLegacy11, Core_sChipModern, Core_xoChip, Core_MegaChip;
 
 // Message queue handling
 
@@ -152,6 +148,10 @@ Begin
           Case MsgQueue[0].PayLoadI Of
             Chip8_VIP:
               Core := TChip8Core.Create;
+            Chip8_Chip8x:
+              Core := TChip8xCore.Create;
+            Chip8_Chip48:
+              Core := TChip48Core.Create;
             Chip8_SChip_Legacy10:
               Core := TSChipLegacy10Core.Create;
             Chip8_SChip_Legacy11:
@@ -282,24 +282,16 @@ Begin
 End;
 
 Procedure TChip8Interpreter.KeyDown(Key: Integer);
-Var
-  i: Integer;
 Begin
 
-  For i := 0 To 15 Do
-    If Key = Ord(KeyCodes[i]) Then
-      Core.KeyStates[i] := True;
+  Core.KeyDown(Key);
 
 End;
 
 Procedure TChip8Interpreter.KeyUp(Key: Integer);
-Var
-  i: Integer;
 Begin
 
-  For i := 0 To 15 Do
-    If Key = Ord(KeyCodes[i]) Then
-      Core.KeyStates[i] := False;
+  Core.KeyUp(Key);
 
 End;
 
@@ -318,7 +310,7 @@ Begin
   RenderInfo := Core.GetDisplayInfo;
 
   Case RenderInfo.Depth of
-    8: // Chip8, sChip and XO-Chip
+    8: // Chip8, Chip48, sChip and XO-Chip
       Begin
         Src := RenderInfo.Data;
         For Idx := 0 To Length(DisplayArray) -1 Do Begin
@@ -326,7 +318,7 @@ Begin
           Inc(Src);
         End;
       End;
-    32: // Mega-Chip
+    32: // Chip8x, Mega-Chip
       Begin
         CopyMemory(@DisplayArray[0], RenderInfo.Data, RenderInfo.Width * RenderInfo.Height * SizeOf(LongWord));
       End;

@@ -7,13 +7,14 @@ Uses SysUtils, Types, Classes, Windows, Math, SyncObjs, Sound, Core_Def;
 Const
 
   Chip8_VIP            = 0;
-  Chip8_Chip8x         = 1;
-  Chip8_Chip48         = 2;
-  Chip8_SChip_Legacy10 = 3;
-  Chip8_SChip_Legacy11 = 4;
-  Chip8_SChip_Modern   = 5;
-  Chip8_XOChip         = 6;
-  Chip8_MegaChip       = 7;
+  Chip8_Hybrid         = 1;
+  Chip8_Chip8x         = 2;
+  Chip8_Chip48         = 3;
+  Chip8_SChip_Legacy10 = 4;
+  Chip8_SChip_Legacy11 = 5;
+  Chip8_SChip_Modern   = 6;
+  Chip8_XOChip         = 7;
+  Chip8_MegaChip       = 8;
 
   IntMsg_Pause         = 0;
   IntMsg_Resume        = 1;
@@ -21,6 +22,8 @@ Const
   IntMsg_Close         = 3;
   IntMsg_LoadROM       = 4;
   IntMsg_Reset         = 5;
+  IntMsg_KeyDown       = 6;
+  IntMsg_KeyUp         = 7;
 
 Type
 
@@ -100,7 +103,7 @@ Const
 
 implementation
 
-Uses Display, Core_Chip8, Core_Chip8x, Core_Chip48, Core_sChipLegacy10, Core_sChipLegacy11, Core_sChipModern, Core_xoChip, Core_MegaChip;
+Uses Display, Core_Chip8, Core_RCA1802, Core_Chip8x, Core_Chip48, Core_sChipLegacy10, Core_sChipLegacy11, Core_sChipModern, Core_xoChip, Core_MegaChip;
 
 // Message queue handling
 
@@ -148,6 +151,8 @@ Begin
           Case MsgQueue[0].PayLoadI Of
             Chip8_VIP:
               Core := TChip8Core.Create;
+            Chip8_Hybrid:
+              Core := TRCA1802Core.Create;
             Chip8_Chip8x:
               Core := TChip8xCore.Create;
             Chip8_Chip48:
@@ -177,6 +182,14 @@ Begin
       IntMsg_Reset:
         Begin
           Core.Reset;
+        End;
+      IntMsg_KeyDown:
+        Begin
+          Core.KeyDown(MsgQueue[0].PayLoadI);
+        End;
+      IntMsg_KeyUp:
+        Begin
+          Core.KeyUp(MsgQueue[0].PayLoadI);
         End;
     End;
 
@@ -237,7 +250,7 @@ End;
 Procedure TChip8Interpreter.Reset;
 Begin
 
-  Core.Reset;
+  QueueAction(IntMsg_Reset);
 
 End;
 
@@ -284,14 +297,14 @@ End;
 Procedure TChip8Interpreter.KeyDown(Key: Integer);
 Begin
 
-  Core.KeyDown(Key);
+  QueueAction(IntMsg_KeyDown, Key);
 
 End;
 
 Procedure TChip8Interpreter.KeyUp(Key: Integer);
 Begin
 
-  Core.KeyUp(Key);
+  QueueAction(IntMsg_KeyUp, Key);
 
 End;
 

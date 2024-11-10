@@ -17,8 +17,6 @@ Type
     Function  GetMem(Address: Integer): Byte; Virtual;
     Procedure WriteMem(Address: Integer; Value: Byte); Virtual;
     Procedure DoSoundTimer; Virtual;
-    Procedure KeyDown(Key: Integer); Override;
-    Procedure KeyUp(Key: Integer); Override;
     Procedure Present; Override;
 
     Procedure Op0nnn; Virtual; Procedure Op0000; Virtual; Procedure Op00E0; Virtual; Procedure Op00EE; Virtual;
@@ -33,40 +31,9 @@ Type
     Procedure OpFx33; Virtual; Procedure OpFx55; Virtual; Procedure OpFx65; Virtual;
   End;
 
-Const
-
-  KeyCodes: Array[0..$F] of Char =
-    ('X', '1', '2', '3',
-     'Q', 'W', 'E', 'A',
-     'S', 'D', 'Z', 'C',
-     '4', 'R', 'F', 'V');
-
-
 implementation
 
 Uses Windows, SysUtils, Classes, Math, Chip8Int, Display;
-
-Procedure TChip8Core.KeyDown(Key: Integer);
-Var
-  idx: Integer;
-Begin
-
-  For idx := 0 To 15 Do
-    If Key = Ord(KeyCodes[idx]) Then
-      KeyStates[idx] := True;
-
-End;
-
-Procedure TChip8Core.KeyUp(Key: Integer);
-Var
-  idx: Integer;
-Begin
-
-  For idx := 0 To 15 Do
-    If Key = Ord(KeyCodes[idx]) Then
-      KeyStates[idx] := False;
-
-End;
 
 Procedure TChip8Core.Present;
 Begin
@@ -99,7 +66,7 @@ Procedure TChip8Core.SetDisplay(Width, Height, Depth: Integer);
 Begin
 
   SetLength(DisplayMem, Width * Height);
-  SetLength(PresentDisplay, Length(DisplayMem));
+  SetLength(PresentDisplay, Length(DisplayMem) * (Depth Div 8));
   DispWidth := Width; DispHeight := Height;
   DispDepth := Depth;
 

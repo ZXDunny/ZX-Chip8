@@ -14,7 +14,8 @@ uses
   Sound in 'Sound.pas',
   Core_MegaChip in 'Core_MegaChip.pas',
   Core_Chip48 in 'Core_Chip48.pas',
-  Core_Chip8x in 'Core_Chip8x.pas';
+  Core_Chip8x in 'Core_Chip8x.pas',
+  Core_RCA1802 in 'Core_RCA1802.pas';
 
 {$R *.res}
 

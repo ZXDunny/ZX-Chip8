@@ -48,11 +48,18 @@ Type
     {$ENDIF}
   End;
 
-{$IFDEF DEBUG}
+
 Const
 
+  KeyCodes: Array[0..$F] of Char =
+    ('X', '1', '2', '3',
+     'Q', 'W', 'E', 'A',
+     'S', 'D', 'Z', 'C',
+     '4', 'R', 'F', 'V');
+
+  {$IFDEF DEBUG}
   LogFilename = 'c:\temp\c8log.txt';
-{$ENDIF}
+  {$ENDIF}
 
 implementation
 
@@ -84,13 +91,25 @@ Begin
 End;
 
 Procedure TCore.KeyDown(Key: Integer);
+Var
+  idx: Integer;
 Begin
-  //
+
+  For idx := 0 To 15 Do
+    If Key = Ord(KeyCodes[idx]) Then
+      KeyStates[idx] := True;
+
 End;
 
 Procedure TCore.KeyUp(Key: Integer);
+Var
+  idx: Integer;
 Begin
-  //
+
+  For idx := 0 To 15 Do
+    If Key = Ord(KeyCodes[idx]) Then
+      KeyStates[idx] := False;
+
 End;
 
 {$IFDEF DEBUG}

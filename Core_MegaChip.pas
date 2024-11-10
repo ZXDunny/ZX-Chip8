@@ -66,6 +66,7 @@ End;
 
 Function TMegaChipCore.Blend(rgb1, rgb2: LongWord): LongWord;
 Begin
+
   // Blend
   Case SprBlend of
     0: // Normal

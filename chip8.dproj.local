@@ -3,8 +3,8 @@
 	<Transactions>
     <Transaction>2021/09/15 10:44:09.000.118,=C:\Users\ZXDunny\Documents\Embarcadero\Studio\Projects\Unit1.pas</Transaction>
     <Transaction>2024/08/25 14:19:31.000.174,=C:\Users\ZXDunny\Documents\Embarcadero\Studio\Projects\Unit1.pas</Transaction>
-    <Transaction>2024/08/25 14:20:20.000.495,D:\Projects\Chip8\mainform.dfm=C:\Users\ZXDunny\Documents\Embarcadero\Studio\Projects\Unit1.dfm</Transaction>
     <Transaction>2024/08/25 14:20:20.000.495,D:\Projects\Chip8\mainform.pas=C:\Users\ZXDunny\Documents\Embarcadero\Studio\Projects\Unit1.pas</Transaction>
+    <Transaction>2024/08/25 14:20:20.000.495,D:\Projects\Chip8\mainform.dfm=C:\Users\ZXDunny\Documents\Embarcadero\Studio\Projects\Unit1.dfm</Transaction>
     <Transaction>2024/08/25 14:20:26.000.157,D:\Projects\Chip8\chip8.dproj=C:\Users\ZXDunny\Documents\Embarcadero\Studio\Projects\Project1.dproj</Transaction>
     <Transaction>2024/08/25 14:35:34.000.717,=D:\Projects\Chip8\Unit1.pas</Transaction>
     <Transaction>2024/08/25 14:38:22.000.654,D:\Projects\Chip8\Display.pas=D:\Projects\Chip8\Unit1.pas</Transaction>
@@ -32,9 +32,11 @@
     <Transaction>2024/10/25 14:37:52.000.369,D:\Projects\Chip8\Sound.pas=D:\Projects\Chip8\Unit1.pas</Transaction>
     <Transaction>2024/10/29 13:45:10.000.082,=D:\Projects\Chip8\Unit1.pas</Transaction>
     <Transaction>2024/10/29 13:45:31.000.545,D:\Projects\Chip8\Unit1.pas=D:\Projects\Chip8\Core_MegaChip.pas</Transaction>
-    <Transaction>2024/11/04 15:30:57.964,=D:\Projects\Chip8\Unit1.pas</Transaction>
-    <Transaction>2024/11/04 15:41:20.650,D:\Projects\Chip8\Core_Chip48.pas=D:\Projects\Chip8\Unit1.pas</Transaction>
-    <Transaction>2024/11/04 16:21:50.586,=D:\Projects\Chip8\Unit1.pas</Transaction>
-    <Transaction>2024/11/04 16:24:28.081,D:\Projects\Chip8\Core_Chip8x.pas=D:\Projects\Chip8\Unit1.pas</Transaction>
+    <Transaction>2024/11/04 15:30:57.000.964,=D:\Projects\Chip8\Unit1.pas</Transaction>
+    <Transaction>2024/11/04 15:41:20.000.650,D:\Projects\Chip8\Core_Chip48.pas=D:\Projects\Chip8\Unit1.pas</Transaction>
+    <Transaction>2024/11/04 16:21:50.000.586,=D:\Projects\Chip8\Unit1.pas</Transaction>
+    <Transaction>2024/11/04 16:24:28.000.081,D:\Projects\Chip8\Core_Chip8x.pas=D:\Projects\Chip8\Unit1.pas</Transaction>
+    <Transaction>2024/11/05 19:52:55.000.732,=D:\Projects\Chip8\Unit1.pas</Transaction>
+    <Transaction>2024/11/05 19:53:11.000.283,D:\Projects\Chip8\Core_RCA1802.pas=D:\Projects\Chip8\Unit1.pas</Transaction>
   </Transactions>
 </BorlandProject>

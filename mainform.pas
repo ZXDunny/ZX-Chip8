@@ -57,9 +57,9 @@ var
 
 Const
 
-  MaxModels = 8;
-  ModelNames:     Array[0..MaxModels -1] of String = ('VIP', 'Chip8x', 'Chip-48', 'SChip1.0', 'SChip1.1', 'SChip Modern', 'XO-Chip', 'MegaChip');
-  ModelLongNames: Array[0..MaxModels -1] of String = ('Cosmac VIP (Chip8)', 'Chip8X', 'Chip-48', 'Legacy SChip 1.0', 'Legacy SChip 1.1', 'Modern SChip', 'XO-Chip', 'MegaChip');
+  MaxModels = 9;
+  ModelNames:     Array[0..MaxModels -1] of String = ('VIP', 'Hybrid VIP', 'Chip8x', 'Chip-48', 'SChip1.0', 'SChip1.1', 'SChip Modern', 'XO-Chip', 'MegaChip');
+  ModelLongNames: Array[0..MaxModels -1] of String = ('Cosmac VIP (Chip8)', 'Hybrid VIP', 'Chip8X', 'Chip-48', 'Legacy SChip 1.0', 'Legacy SChip 1.1', 'Modern SChip', 'XO-Chip', 'MegaChip');
 
 implementation
 

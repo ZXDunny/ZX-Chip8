@@ -153,12 +153,13 @@ Procedure TMegaChipCore.Reset;
 Begin
 
   Inherited;
+
   SetLength(Memory, 1024 * 1024 * 16);
   FillMemory(@DisplayBuffers[0][0], 256 * 192 * 4, 0);
   FillMemory(@DisplayBuffers[1][0], 256 * 192 * 4, 0);
   FillMemory(@CollMap[0], 256 * 192, 0);
   FillMemory(@DisplayMem[0], Length(DisplayMem), 0);
-  MakeSoundBuffers(50, 4);
+  MakeSoundBuffers(50);
   DisplayFlag := True;
 
   MegaPalette[0]   := $00000000;
@@ -205,6 +206,7 @@ Begin
   Until iCnt >= maxipf;
 
   If Timer > 0 then Dec(Timer);
+
   DoSoundTimer;
 
   If DisplayFlag And Not MegaChipMode Then Begin
@@ -220,7 +222,8 @@ Begin
   Else Begin
     ipf := icnt;
   End;
-  icnt := 0;
+
+  Dec(icnt, maxIpf);
 
 End;
 
@@ -309,7 +312,7 @@ Begin
     dcIn := LastS = 0;
     dcOut := sTimer = 0;
     sPos := 0;
-    stepSize := (BuzzerTone * CycleLength) / 44100;
+    stepSize := (BuzzerTone * CycleLength) / sHz;
     While sPos < BuffSize Do Begin
       t := sBuffPos * 6.283 / CycleLength;
       oSample := Round(16384 * (sin(t) + sin(t * 3) / 3));
@@ -365,7 +368,7 @@ Begin
   // 0010 - Disable MegaChip mode
   MegaChipMode := False;
   ipf := 30;
-  icnt := ipf;
+  icnt := ipf -1;
   HiResMode := False;
   DisplayFlag := True;
 End;
@@ -375,7 +378,7 @@ Begin
   // 0011 - Enable MegaChip mode
   MegaChipMode := True;
   ipf := 3000;
-  icnt := ipf;
+  icnt := ipf -1;
   Present;
 End;
 
@@ -441,7 +444,7 @@ Begin
     Present;
     FillMemory(@DisplayBuffers[CurBuffer][0], 256 * 192 * 4, 0);
     FillMemory(@CollMap[0], 256 * 192, 0);
-    icnt := maxipf;
+    icnt := maxipf -1;
   End Else Begin
     FillMemory(@DisplayMem[0], Length(DisplayMem), 0);
     DisplayFlag := True;
@@ -501,7 +504,7 @@ Begin
     Sample.Data[idx] := GetMem(i + 8 + idx);
   Sample.Loop := (ci And $F) = 0;
   Sample.Position := 0;
-  Sample.Delta := Sample.Rate / 44100;
+  Sample.Delta := Sample.Rate / sHz;
   // De-Click the end of the buffer if it's not looped
   If Not Sample.Loop Then Begin
     l := Min(43, Sample.Length);
@@ -626,8 +629,6 @@ Var
   row, col, cy, cx, idx, pIdx, dOffs: Integer;
   b, bts, bit: Byte;
   vF: Boolean;
-Const
-  Wrapping = False;
 Begin
   // Dxyn - Draw Sprite
   If Not MegaChipMode Then
@@ -657,7 +658,7 @@ Begin
       For row := 0 To SprHeight -1 Do Begin
         cy := row + y;
         If cy > 255 Then
-          If Wrapping Then
+          If DxynWrap Then
             cy := cy And 255
           Else
             Break;
@@ -666,7 +667,7 @@ Begin
           For col := 0 To SprWidth -1 Do Begin
             cx := x + col;
             If cx > 255 Then
-              If Wrapping Then
+              If DxynWrap Then
                 cx := cx And 255
               Else
                 Break;
@@ -708,7 +709,7 @@ Begin
   Present;
   Inherited;
   If KeyStage <> 0 Then
-    icnt := maxipf;
+    icnt := maxipf -1;
 End;
 
 Procedure TMegaChipCore.OpFx1E;

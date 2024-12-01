@@ -2,28 +2,31 @@ unit Chip8Int;
 
 interface
 
-Uses SysUtils, Types, Classes, Windows, Math, SyncObjs, Sound, Core_Def;
+Uses SysUtils, Types, Classes, Windows, Math, SyncObjs, Sound, Core_Def, Core_Custom;
 
 Const
 
-  Chip8_VIP            = 0;
-  Chip8_Hybrid         = 1;
-  Chip8_Chip8x         = 2;
-  Chip8_Chip48         = 3;
-  Chip8_SChip_Legacy10 = 4;
-  Chip8_SChip_Legacy11 = 5;
-  Chip8_SChip_Modern   = 6;
-  Chip8_XOChip         = 7;
-  Chip8_MegaChip       = 8;
+  Chip8_None           = -1;
+  Chip8_VIP            =  0;
+  Chip8_Hybrid         =  1;
+  Chip8_Chip8x         =  2;
+  Chip8_Chip48         =  3;
+  Chip8_SChip_Legacy10 =  4;
+  Chip8_SChip_Legacy11 =  5;
+  Chip8_SChip_Modern   =  6;
+  Chip8_XOChip         =  7;
+  Chip8_MegaChip       =  8;
+  Chip8_BytePusher     =  9;
+  Chip8_Custom         = 10;
 
-  IntMsg_Pause         = 0;
-  IntMsg_Resume        = 1;
-  IntMsg_SwitchCore    = 2;
-  IntMsg_Close         = 3;
-  IntMsg_LoadROM       = 4;
-  IntMsg_Reset         = 5;
-  IntMsg_KeyDown       = 6;
-  IntMsg_KeyUp         = 7;
+  IntMsg_Pause         =  0;
+  IntMsg_Resume        =  1;
+  IntMsg_SwitchCore    =  2;
+  IntMsg_Close         =  3;
+  IntMsg_LoadROM       =  4;
+  IntMsg_Reset         =  5;
+  IntMsg_KeyDown       =  6;
+  IntMsg_KeyUp         =  7;
 
 Type
 
@@ -44,25 +47,24 @@ Type
     MsgPtr: Integer;
     MsgLock: TCriticalSection;
     Paused, Finished: Boolean;
+    intQuirks: TQuirkSettings;
     Constructor Create(CreateSuspended: Boolean = False);
-    Procedure SetCore(NewCoreType: TChip8CoreType);
+    Procedure SetCore(NewCoreType: TChip8CoreType; Quirks: pQuirkSettings);
     Procedure Execute; Override;
     Procedure Reset;
     Procedure LoadROM(Filename: String);
     Procedure KeyDown(Key: integer);
     Procedure KeyUp(Key: Integer);
     Procedure Render;
-    Procedure Wait;
+    Procedure Pause;
+    Procedure Restart;
+    Procedure Close;
 
     Procedure QueueAction(MsgID: Integer; Int: Integer = 0; Str: String = '');
     Procedure ProcessActions;
   End;
 
   TOpcodeProc = Procedure(Interpreter: TChip8Interpreter);
-
-  Procedure PauseInterpreter(Interpreter: TChip8Interpreter);
-  Procedure ResumeInterpreter(Interpreter: TChip8Interpreter);
-  Procedure CloseInterpreter(Interpreter: TChip8Interpreter);
 
 Var
   DisplayFlag: Boolean;
@@ -103,7 +105,7 @@ Const
 
 implementation
 
-Uses Display, Core_Chip8, Core_RCA1802, Core_Chip8x, Core_Chip48, Core_sChipLegacy10, Core_sChipLegacy11, Core_sChipModern, Core_xoChip, Core_MegaChip;
+Uses Display, Core_Chip8, Core_RCA1802, Core_Chip8x, Core_Chip48, Core_sChipLegacy10, Core_sChipLegacy11, Core_sChipModern, Core_xoChip, Core_MegaChip, Core_BytePusher;
 
 // Message queue handling
 
@@ -127,28 +129,43 @@ End;
 
 Procedure TChip8Interpreter.ProcessActions;
 Var
-  i: Integer;
+  i, ID, PayLoadI, OldCoreType: Integer;
+  PayLoadS: String;
 Begin
 
   // Always called by the interpreter, never by any other thread.
 
   MsgLock.Enter;
 
-  If MsgPtr >= 0 Then Begin
+  While MsgPtr >= 0 Do Begin
 
-    Case MsgQueue[0].ID of
+    ID := MsgQueue[0].ID;
+    PayLoadI := MsgQueue[0].PayLoadI;
+    PayLoadS := MsgQueue[0].PayLoadS;
+
+    For i := 0 To MsgPtr -1 Do Begin
+      MsgQueue[i].ID := MsgQueue[i +1].ID;
+      MsgQueue[i].PayloadI := MsgQueue[i +1].PayloadI;
+      MsgQueue[i].PayLoadS := MsgQueue[i +1].PayLoadS;
+    End;
+    Dec(MsgPtr);
+
+    Case ID of
       IntMsg_Pause:
         Begin
+          PauseSound;
           Paused := True;
         End;
       IntMsg_Resume:
         Begin
           Paused := False;
+          ResumeSound;
         End;
       IntMsg_SwitchCore:
         Begin
+          OldCoreType := CoreType;
           Core.Free;
-          Case MsgQueue[0].PayLoadI Of
+          Case PayLoadI Of
             Chip8_VIP:
               Core := TChip8Core.Create;
             Chip8_Hybrid:
@@ -167,9 +184,18 @@ Begin
               Core := TXOChipCore.Create;
             Chip8_MegaChip:
               Core := TMegaChipCore.Create;
+            Chip8_BytePusher:
+              Core := TBytePusherCore.Create;
+            Chip8_Custom:
+              Begin
+                Core := TCustomCore.Create;
+                TCustomCore(Core).SetCustomSettings(intQuirks);
+              End;
           End;
-          CoreType := MsgQueue[0].PayLoadI;
+          If ((OldCoreType = Chip8_BytePusher) or (PayLoadI = Chip8_BytePusher)) And (OldCoreType <> PayLoadI) Then
+            ROMName := '';
           Core.Reset;
+          CoreType := PayLoadI;
         End;
       IntMsg_Close:
         Begin
@@ -177,7 +203,7 @@ Begin
         End;
       IntMsg_LoadROM:
         Begin
-          Core.LoadROM(MsgQueue[0].PayLoadS);
+          Core.LoadROM(PayLoadS, True);
         End;
       IntMsg_Reset:
         Begin
@@ -185,20 +211,13 @@ Begin
         End;
       IntMsg_KeyDown:
         Begin
-          Core.KeyDown(MsgQueue[0].PayLoadI);
+          Core.KeyDown(PayLoadI);
         End;
       IntMsg_KeyUp:
         Begin
-          Core.KeyUp(MsgQueue[0].PayLoadI);
+          Core.KeyUp(PayLoadI);
         End;
     End;
-
-    For i := 0 To MsgPtr -2 Do Begin
-      MsgQueue[i].ID := MsgQueue[i +1].ID;
-      MsgQueue[i].PayloadI := MsgQueue[i +1].PayloadI;
-      MsgQueue[i].PayLoadS := MsgQueue[i +1].PayLoadS;
-    End;
-    Dec(MsgPtr);
 
   End;
 
@@ -215,35 +234,29 @@ Begin
   Inherited;
 End;
 
-Procedure TChip8Interpreter.Wait;
-Begin
-  Sleep(1);
-  FrameLoop;
-End;
-
-Procedure TChip8Interpreter.SetCore(NewCoreType: TChip8CoreType);
+Procedure TChip8Interpreter.SetCore(NewCoreType: TChip8CoreType; Quirks: pQuirkSettings);
 Begin
 
+  CoreType := Chip8_None;
+  If Assigned(Quirks) Then CopyMemory(@intQuirks.CPUType, @Quirks^.CPUType, SizeOf(TQuirkSettings));
   QueueAction(IntMsg_SwitchCore, NewCoreType);
-  Repeat
-    Wait;
-  Until CoreType = NewCoreType;
+  While CoreType <> NewCoreType Do Sleep(1);
 
 End;
 
-Procedure PauseInterpreter(Interpreter: TChip8Interpreter);
+Procedure TChip8Interpreter.Pause;
 Begin
 
-  Interpreter.QueueAction(IntMsg_Pause);
-  While Not Interpreter.Paused Do Interpreter.Wait;
+  QueueAction(IntMsg_Pause);
+  While Not Paused Do Sleep(1);
 
 End;
 
-Procedure ResumeInterpreter(Interpreter: TChip8Interpreter);
+Procedure TChip8Interpreter.Restart;
 Begin
 
-  Interpreter.QueueAction(IntMsg_Resume);
-  While Interpreter.Paused Do Interpreter.Wait;
+  QueueAction(IntMsg_Resume);
+  While Paused Do Sleep(1);
 
 End;
 
@@ -258,6 +271,7 @@ Procedure TChip8Interpreter.Execute;
 Begin
 
   NameThreadForDebugging('Interpreter');
+  Priority := tpHigher;
   Finished := False;
 
   Repeat
@@ -267,7 +281,7 @@ Begin
     If Not Paused Then
       Core.InstructionLoop
     Else
-      WaitForSync;
+      Sleep(1);
 
   Until Terminated;
 
@@ -275,14 +289,14 @@ Begin
 
 End;
 
-Procedure CloseInterpreter(Interpreter: TChip8Interpreter);
+Procedure TChip8Interpreter.Close;
 Begin
 
-  Interpreter.QueueAction(IntMsg_Close);
+  QueueAction(IntMsg_Close);
   Repeat
     Sleep(1);
     DisplayUpdate := False;
-  Until Interpreter.Finished;
+  Until Finished;
 
 End;
 
@@ -315,12 +329,10 @@ Var
   Src: pByte;
 Begin
 
+  RenderInfo := Core.GetDisplayInfo;
+
   iPerFrame := Core.ipf;
   If FullSpeed Then Core.ipf := 0;
-
-  DisplayLock.Enter;
-
-  RenderInfo := Core.GetDisplayInfo;
 
   Case RenderInfo.Depth of
     8: // Chip8, Chip48, sChip and XO-Chip
@@ -331,13 +343,11 @@ Begin
           Inc(Src);
         End;
       End;
-    32: // Chip8x, Mega-Chip
+    32: // Chip8x, Mega-Chip, BytePusher
       Begin
         CopyMemory(@DisplayArray[0], RenderInfo.Data, RenderInfo.Width * RenderInfo.Height * SizeOf(LongWord));
       End;
   End;
-
-  DisplayLock.Leave;
 
 End;
 

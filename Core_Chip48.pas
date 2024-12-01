@@ -41,7 +41,7 @@ Begin
   Inherited;
 
   maxipf := 20;
-  MakeSoundBuffers(64, 4);
+  MakeSoundBuffers(64);
 
 End;
 
@@ -72,7 +72,7 @@ Begin
   Else Begin
     ipf := icnt;
   End;
-  icnt := 0;
+  Dec(icnt, maxIpf);
 
 End;
 
@@ -111,18 +111,18 @@ End;
 Procedure TChip48Core.Op8xy6;
 Begin
   // 8xy6 - Shift Reg X right
-  x := (ci Shr 4) And $F;
+  x := (ci Shr 8) And $F;
   t := Regs[x] And 1;
-  Regs[(ci Shr 8) And $F] := Regs[x] Shr 1;
+  Regs[x] := Regs[x] Shr 1;
   Regs[$F] := t;
 End;
 
 Procedure TChip48Core.Op8xyE;
 Begin
   // 8xyE - Shift Reg X left
-  x := (ci Shr 4) And $F;
+  x := (ci Shr 8) And $F;
   t := Regs[x] Shr 7;
-  Regs[(ci Shr 8) And $F] := Regs[x] Shl 1;
+  Regs[x] := Regs[x] Shl 1;
   Regs[$F] := t;
 End;
 

@@ -11,6 +11,7 @@ Type
     Storage: Array[0..15] of Byte;
     nn: Word;
     hiresMode: Boolean;
+    clipcol: Integer;
 
     Procedure BuildTables; Override;
     Procedure Reset; Override;
@@ -71,7 +72,7 @@ Begin
   Inherited;
   hiresMode := False;
   for idx := 0 to 99 Do Memory[idx + 160] := HiresFont10[idx];
-  MakeSoundBuffers(64, 4);
+  MakeSoundBuffers(64);
 
 End;
 
@@ -102,7 +103,7 @@ Begin
   Else Begin
     ipf := icnt;
   End;
-  icnt := 0;
+  Dec(icnt, maxIpf);
 
 End;
 
@@ -113,7 +114,8 @@ Begin
   // $00E0 - Clear display
   FillMemory(@DisplayMem[0], Length(DisplayMem), 0);
   DisplayFlag := True;
-  icnt := maxipf;
+  If Not DoQuirks Or DisplayWait Then
+    icnt := maxipf -1;
 End;
 
 Procedure TSChipLegacy10Core.Op00FD;
@@ -185,7 +187,7 @@ End;
 
 Procedure TSChipLegacy10Core.OpDxyn;
 Var
-  cc, row, col, c: Integer;
+  cc, row, col, c, lx, ly: Integer;
   bit, b, bts, Addr, pOfs, np: LongWord;
 
   Function Bloat(b: LongWord): LongWord; inline;
@@ -211,15 +213,24 @@ Begin
     y := Regs[y] And 63;
     If n = 0 Then Begin
       // Dxy0 - 16x16 sprite
-      For row := 0 to Min(15, 63 - y) Do Begin
+      If Not DoQuirks or Not DxynWrap Then
+        ly := Min(15, 63 - y)
+      Else
+        ly := 15;
+      clipcol := 15 - ly;
+      For row := 0 to ly Do Begin
         b := GetMem(i + row * 2) Shl 8 + GetMem(i + 1 + row * 2);
         bit := $8000;
         c := 0;
-        For col := 0 To Min(15, 127 - x) Do Begin
+        If Not DoQuirks or DxynWrap Then
+          lx := Min(15, 127 - x)
+        else
+          lx := 15;
+        For col := 0 To lx Do Begin
           bts := Ord(b And bit > 0);
           bit := bit Shr 1;
           If bts > 0 Then Begin
-            Addr := x + col + (y + row) * 128;
+            Addr := ((x + col) And 127) + ((y + row) And 63) * 128;
             If DisplayMem[Addr] <> 0 Then c := c Or 1;
             DisplayMem[Addr] := DisplayMem[Addr] Xor bts;
           End;
@@ -229,15 +240,24 @@ Begin
       End;
     End Else Begin
       // Dxyn - 8xn sprite
-      For row := 0 To Min(n -1, 63 - y) Do Begin
+      If Not DoQuirks or Not DxynWrap Then
+        ly := Min(n - 1, 63 - y)
+      Else
+        ly := n - 1;
+      clipcol := (n - 1) - ly;
+      For row := 0 To ly Do Begin
         b := GetMem(i + row);
         bit := $80;
         c := 0;
-        For col := 0 To Min(7, 127 - x) Do Begin
+        If Not DoQuirks or Not DxynWrap Then
+          lx := Min(7, 127 - x)
+        Else
+          lx := 7;
+        For col := 0 To lx Do Begin
           bts := Ord(b And bit > 0);
           bit := bit Shr 1;
           If bts > 0 Then Begin
-            Addr := x + col + (y + row) * 128;
+            Addr := ((x + col) And 127) + ((y + row) And 63) * 128;
             If DisplayMem[Addr] <> 0 Then c := c Or 1;
             DisplayMem[Addr] := DisplayMem[Addr] Xor bts;
           End;
@@ -246,7 +266,8 @@ Begin
           Inc(cc);
       End;
     End;
-    Regs[$F] := cc;
+    Regs[$F] := Ord(cc > 0);
+    Inc(clipCol, cc);
   End Else Begin
     // Lowres mode SChip
     If n = 0 Then n := 16;
@@ -255,14 +276,22 @@ Begin
     pOfs := 16 - ((x Mod 8) * 2);
     x := (x * 2) And 112; y := (y * 2) And 62;
     Regs[$F] := 0;
-    For row := 0 To Min(n -1, (62 - y) Div 2) Do Begin
+    If Not DoQuirks or Not DxynWrap Then
+      ly := Min(n - 1, (62 - y) Div 2)
+    Else
+      ly := n - 1;
+    For row := 0 To ly Do Begin
       b := GetMem(i + row);
       b := Bloat(b) Shl pOfs;
       bit := $80000000;
-      For col := 0 To Min(31, 127 - x) Do Begin
+      If Not DoQuirks or Not DxynWrap Then
+        lx := Min(31, 127 - x)
+      Else
+        lx := 31;
+      For col := 0 To lx Do Begin
         bts := Ord(b And bit > 0);
         bit := bit Shr 1;
-        Addr := x + col + (y + row * 2) * 128;
+        Addr := ((x + col) And 127) + ((y + row * 2) And 63) * 128;
         If DisplayMem[Addr] <> 0 Then Inc(cc);
         np := DisplayMem[Addr] Xor bts;
         DisplayMem[Addr] := np;
@@ -270,7 +299,8 @@ Begin
       End;
     End;
     If cc > 0 Then Regs[$F] := 1;
-    icnt := maxipf;
+    If Not DoQuirks Or DisplayWait Then
+      icnt := maxipf -1;
   End;
   DisplayFlag := True;
 End;

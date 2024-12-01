@@ -5,6 +5,7 @@ object MainForm: TMainForm
   ClientHeight = 208
   ClientWidth = 400
   Color = clMedGray
+  DoubleBuffered = True
   Font.Charset = DEFAULT_CHARSET
   Font.Color = clWindowText
   Font.Height = -11
@@ -12,6 +13,7 @@ object MainForm: TMainForm
   Font.Style = []
   Menu = MainMenu
   OldCreateOrder = False
+  Position = poScreenCenter
   OnCreate = FormCreate
   OnDestroy = FormDestroy
   OnKeyDown = FormKeyDown
@@ -67,6 +69,10 @@ object MainForm: TMainForm
       end
       object menuRecentfiles: TMenuItem
         Caption = 'Recent files'
+      end
+      object Browser1: TMenuItem
+        Caption = 'Browser'
+        OnClick = Browser1Click
       end
       object menuReset: TMenuItem
         Caption = 'Reset'

@@ -7,15 +7,13 @@ Uses SyncObjs, Core_Def, Sound;
 Type
 
   TChip8Core = Class(TCore)
-    Function  GetDisplayInfo: TDisplayInfo; Override;
-    Procedure SetDisplay(Width, Height, Depth: Integer);
     Procedure BuildTables; Virtual;
     Procedure Reset; Override;
-    Procedure LoadROM(Filename: String); Override;
+    Procedure LoadROM(Filename: String; DoReset: Boolean); Override;
     Procedure InstructionLoop; Override;
-    Procedure Frame(AddCycles: Integer); Virtual;
-    Function  GetMem(Address: Integer): Byte; Virtual;
-    Procedure WriteMem(Address: Integer; Value: Byte); Virtual;
+    Procedure Frame(AddCycles: Integer); Override;
+    Function  GetMem(Address: Integer): Byte; Override;
+    Procedure WriteMem(Address: Integer; Value: Byte); Override;
     Procedure DoSoundTimer; Virtual;
     Procedure Present; Override;
 
@@ -43,32 +41,6 @@ Begin
   DisplayUpdate := True;
   DisplayFlag := False;
   DisplayLock.Leave;
-
-End;
-
-Function TChip8Core.GetDisplayInfo: TDisplayInfo;
-Begin
-
-  DisplayLock.Enter;
-
-  With Result Do Begin
-    Data := @PresentDisplay[0];
-    Width := DispWidth;
-    Height := DispHeight;
-    Depth := DispDepth;
-  End;
-
-  DisplayLock.Leave;
-
-End;
-
-Procedure TChip8Core.SetDisplay(Width, Height, Depth: Integer);
-Begin
-
-  SetLength(DisplayMem, Width * Height);
-  SetLength(PresentDisplay, Length(DisplayMem) * (Depth Div 8));
-  DispWidth := Width; DispHeight := Height;
-  DispDepth := Depth;
 
 End;
 
@@ -131,6 +103,8 @@ var
   idx: Integer;
 Begin
 
+  Inherited;
+
   {$IFDEF DEBUG}
   If FileExists(LogFilename) Then
     DeleteFile(LogFilename);
@@ -141,8 +115,9 @@ Begin
   StackPtr := 0;
   mCycles := 0;
   PC := $200;
+  maxIPF := 3668;
 
-  MakeSoundBuffers(60, 4);
+  MakeSoundBuffers(60);
   BuzzerTone := 1400;
   sBuffPos := 0;
   LastS := 0;
@@ -165,7 +140,7 @@ Begin
 
 End;
 
-Procedure TChip8Core.LoadROM(Filename: String);
+Procedure TChip8Core.LoadROM(Filename: String; DoReset: Boolean);
 Var
   f: TFileStream;
   bin: Array of Byte;
@@ -179,14 +154,14 @@ Begin
     f.Read(bin[0], f.Size);
     f.Free;
 
-    Reset;
+    If DoReset Then Reset;
 
     for idx := 0 to Min(High(bin), High(Memory)) do
       Memory[idx + 512] := bin[idx];
 
     PC := 512;
     mCycles := 3250;
-    NextFrame := 3668;
+    NextFrame := maxIPF;
 
   End;
 
@@ -231,7 +206,7 @@ Begin
     dcIn := LastS = 0;
     dcOut := sTimer = 0;
     sPos := 0;
-    stepSize := (BuzzerTone * CycleLength) / 44100;
+    stepSize := (BuzzerTone * CycleLength) / sHz;
     While sPos < BuffSize Do Begin
       t := sBuffPos * 6.283 / CycleLength;
       oSample := Round(16384 * (Sin(t) + Sin(t * 3) / 3));
@@ -248,6 +223,8 @@ Begin
 End;
 
 Procedure TChip8Core.Frame(AddCycles: Integer);
+Var
+  cycleScale: Double;
 Begin
 
   // If the frame is done, signal for the next.
@@ -259,8 +236,11 @@ Begin
     DoSoundTimer;
     If DisplayFlag Then Present;
     InjectSound(@FrameBuffer[0], Not FullSpeed);
-    Inc(mCycles, 1832 + (Ord(stimer <> 0) * 4) + (Ord(timer <> 0) * 8) - 3668);
-    NextFrame := ((mCycles + 2572) div 3668) * 3668 + 1096;
+
+    cycleScale := maxIPF/3668;
+    Inc(mCycles, 1832 + (Ord(stimer <> 0) * 4) + (Ord(timer <> 0) * 8) - maxIPF);
+    NextFrame := ((mCycles + Round(2572 * cycleScale)) div maxIPF) * maxIPF + Round(1096 * cycleScale);
+
     ExitLoop := True;
     ipf := icnt;
     icnt := 0;
@@ -484,7 +464,7 @@ End;
 
 Procedure TChip8Core.OpDxyn;
 Var
-  cx, cy, dx, j, dAddr, col, bOffs, pCycles, lc, olc, a: integer;
+  cx, cy, dx, j, dAddr, col, bOffs, pCycles, lc, olc, a, lx, ly: integer;
   Bit, db: Byte;
   c: Array[0..1] of Integer;
 Begin
@@ -494,29 +474,39 @@ Begin
   cx := Regs[(ci Shr 8) And $F] And 63;
   cy := Regs[(ci Shr 4) And $F] And 31;
   bOffs := cx And 7;
-  pCycles := 68 + n * (46 + 20 * bOffs);
-  Cycles := NextFrame - mCycles;
-  lc := Max(pCycles - Cycles, 0);
-  Repeat
-    Frame(Cycles);
-    olc := lc;
-    If lc > 0 Then Begin
-      If lc > NextFrame - mCycles Then
-        Dec(lc, NextFrame - mCycles)
-      Else
-        lc := 0;
-      Cycles := NextFrame - mCycles;
-    End;
-  Until olc <= 0;
+  If Not DoQuirks Or DisplayWait Then Begin
+    pCycles := 68 + n * (46 + 20 * bOffs);
+    Cycles := NextFrame - mCycles;
+    lc := Max(pCycles - Cycles, 0);
+    Repeat
+      Frame(Cycles);
+      olc := lc;
+      If lc > 0 Then Begin
+        If lc > NextFrame - mCycles Then
+          Dec(lc, NextFrame - mCycles)
+        Else
+          lc := 0;
+        Cycles := NextFrame - mCycles;
+      End;
+    Until olc <= 0;
+  End;
   Cycles := 26;
-  For a := 0 To Min(n - 1, 32 - cy -1) Do Begin
+  If Not DoQuirks or Not DxynWrap Then
+    ly := Min(n - 1, 32 - cy -1)
+  else
+    ly := n - 1;
+  For a := 0 To ly Do Begin
     db := GetMem(i + a);
     bit := $80;
     c[0] := 0; c[1] := 0;
-    For dx := cx To Min(cx + 7, 63) Do Begin
+    If Not DoQuirks or Not DxynWrap Then
+      lx := Min(cx + 7, 63)
+    else
+      lx := cx + 7;
+    For dx := cx To lx Do Begin
       j := Ord((db And Bit) > 0);
       Bit := Bit Shr 1;
-      dAddr := dx + cy * 64;
+      dAddr := (dx And 63) + ((cy And 31) * 64);
       col := Ord(j And DisplayMem[dAddr]);
       t := t Or col;
       DisplayMem[dAddr] := DisplayMem[dAddr] Xor j;

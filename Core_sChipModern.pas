@@ -49,7 +49,8 @@ Begin
   FillMemory(@Memory[0], Length(Memory), 0);
   for idx := 0 to 79 Do Memory[idx + 80] := Font[idx];
   for idx := 0 to 99 Do Memory[idx + 160] := HiresFont11[idx];
-  MakeSoundBuffers(60, 4);
+  MakeSoundBuffers(60);
+  DisplayWait := False;
 
 End;
 
@@ -118,18 +119,18 @@ End;
 
 Procedure TSChipModernCore.OpDxyn;
 Var
-  cc, row, col, c, w, h: Integer;
+  cc, row, col, c, w, h, lx, ly: Integer;
   bit, b, bts, Addr: LongWord;
   np: Word;
 
   Procedure XorPixel;
   Begin
     If HiResMode Then begin
-      Addr := x + col + (y + row) * 128;
+      Addr := ((x + col) And 127) + ((y + row) And 63) * 128;
       If DisplayMem[Addr] <> 0 Then c := c Or 1;
       DisplayMem[Addr] := DisplayMem[Addr] Xor bts;
     End Else Begin
-      Addr := (x * 2) + (Col * 2) + ((y * 2) + row * 2) * 128;
+      Addr := (((x * 2) + (Col * 2)) And 127) + (((y * 2) + row * 2) And 63) * 128;
       If DisplayMem[Addr] <> 0 Then c := c Or 1;
       np := DisplayMem[Addr] Xor bts; np := (np Shl 8) Or np;
       pWord(@DisplayMem[Addr])^ := np;
@@ -149,11 +150,19 @@ Begin
   y := Regs[y] And h;
   If n = 0 Then Begin
     // Dxy0 - 16x16 sprite
-    For row := 0 to Min(15, h - y) Do Begin
+    If Not DoQuirks or Not DxynWrap Then
+      ly := Min(15, h - y)
+    Else
+      ly := 15;
+    For row := 0 to ly Do Begin
       b := GetMem(i + row * 2) Shl 8 + GetMem(i + 1 + row * 2);
       bit := $8000;
       c := 0;
-      For col := 0 To Min(15, w - x) Do Begin
+      If Not DoQuirks or Not DxynWrap Then
+        lx := Min(15, w - x)
+      Else
+        lx := 15;
+      For col := 0 To lx Do Begin
         bts := Ord(b And bit > 0);
         bit := bit Shr 1;
         If bts > 0 Then XorPixel;
@@ -163,11 +172,19 @@ Begin
     End;
   End Else Begin
     // Dxyn - 8xn sprite
-    For row := 0 To Min(n -1, h - y) Do Begin
+    If Not DoQuirks or Not DxynWrap Then
+      ly := Min(n - 1, h - y)
+    Else
+      ly := n - 1;
+    For row := 0 To ly Do Begin
       b := GetMem(i + row);
       bit := $80;
       c := 0;
-      For col := 0 To Min(7, w - x) Do Begin
+      If Not DoQuirks or Not DxynWrap Then
+        lx := Min(7, w - x)
+      Else
+        lx := 7;
+      For col := 0 To lx Do Begin
         bts := Ord(b And bit > 0);
         bit := bit Shr 1;
         If bts > 0 Then XorPixel;
@@ -177,6 +194,7 @@ Begin
     End;
   End;
   Regs[$F] := Ord(cc <> 0);
+  If DisplayWait Then iCnt := maxipf -1;
   DisplayFlag := True;
 End;
 

@@ -24,12 +24,10 @@ Type
     Procedure Reset; Override;
     Procedure Present; Override;
     Procedure SampleQ(Cycles: Integer);
-    Function  GetDisplayInfo: TDisplayInfo; Override;
-    Procedure SetDisplay(Width, Height, Depth: Integer);
     Procedure LoadSystemROM;
-    Procedure LoadROM(Filename: String); Override;
+    Procedure LoadROM(Filename: String; DoReset: Boolean); Override;
     Procedure InstructionLoop; Override;
-    Function  GetMem(Address: Integer): Byte;
+    Function  GetMem(Address: Integer): Byte; Override;
     Procedure SetMem(Address: Integer; Value: Byte);
     Procedure OutByte(Port, Value: Byte);
     Function  InByte(Port: Byte): Byte;
@@ -93,16 +91,6 @@ Begin
 
 ENd;
 
-Procedure TRCA1802Core.SetDisplay(Width, Height, Depth: Integer);
-Begin
-
-  SetLength(DisplayMem, Width * Height);
-  SetLength(PresentDisplay, Length(DisplayMem) * (Depth Div 8));
-  DispWidth := Width; DispHeight := Height;
-  DispDepth := Depth;
-
-End;
-
 Procedure TRCA1802Core.Present;
 Var
   Idx, j, b, bt, Addr: Integer;
@@ -134,25 +122,7 @@ Begin
 
 End;
 
-Function TRCA1802Core.GetDisplayInfo: TDisplayInfo;
-Begin
-
-  DisplayLock.Enter;
-
-  With Result Do Begin
-    Data := @PresentDisplay[0];
-    Width := DispWidth;
-    Height := DispHeight;
-    Depth := DispDepth;
-  End;
-
-  DisplayLock.Leave;
-
-End;
-
 Procedure TRCA1802Core.Reset;
-var
-  Idx: Integer;
 Begin
 
   I := 0;
@@ -170,10 +140,10 @@ Begin
   ROMLatch := True;
   FrameCount := 0;
 
-  For idx := 0 To 15 Do Regs[idx] := 0;
   FillMemory(@DMABytes[0], 1024, 0);
+  FillMemory(@Memory[0], $FFFF, 0);
 
-  MakeSoundBuffers(60, 4);
+  MakeSoundBuffers(60);
   SetDisplay(256, 128, 32);
   DisplayEnabled := False;
   BuzzerTone := 1400;
@@ -197,7 +167,7 @@ Begin
 
 End;
 
-Procedure TRCA1802Core.LoadROM(Filename: String);
+Procedure TRCA1802Core.LoadROM(Filename: String; DoReset: Boolean);
 Var
   f: TFileStream;
   bin: Array of Byte;
@@ -211,7 +181,7 @@ Begin
     f.Read(bin[0], f.Size);
     f.Free;
 
-    Reset;
+    If DoReset Then Reset;
 
     for idx := 0 to Min(High(bin), High(Memory)) do
       Memory[idx + $200] := bin[idx];
@@ -231,7 +201,7 @@ Begin
 
   Inc(sAcc, Cycles);
   SampleFreq := Round(3668 / (BuffSize Div 4));
-  stepSize := (BuzzerTone * CycleLength) / 44100;
+  stepSize := (BuzzerTone * CycleLength) / sHz;
   While sAcc >= SampleFreq Do Begin
     t := sBuffPos * 6.283 / CycleLength;
     oSample := Ord(Q) * Round(16384 * (Sin(t) + Sin(t * 3) / 3));
@@ -386,6 +356,9 @@ Begin
     0: // Display building
       Begin
         Result := Not EF1;
+      End;
+    1: // Tape input bit
+      Begin
       End;
     2: // Keypad
       Begin

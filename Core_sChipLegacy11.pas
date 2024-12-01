@@ -16,7 +16,7 @@ Type
     Procedure Op00Cn; Virtual;  Procedure Op00FB; Virtual;  Procedure Op00FC; Virtual;
     Procedure OpFx30; Virtual;  Procedure Op00FD; Override; Procedure Op00FE; Override;
     Procedure Op00FF; Override; Procedure OpFx29; Override; Procedure OpFx55; Override;
-    Procedure OpFx65; Override;
+    Procedure OpFx65; Override; Procedure OpDxyn; Override;
 
   End;
 
@@ -33,11 +33,14 @@ Begin
 
   Opcodes0[$FB] := Op00FB; Opcodes0[$FC] := Op00FC;
   Opcodes0[$FD] := Op00FD; Opcodes0[$FE] := Op00FE;
-  Opcodes0[$FF] := Op00FF;
+  Opcodes0[$FF] := Op00FF; Opcodes[$D]   := OpDxyn;
 
-  For idx := 0 to $F Do Opcodes0[$C0 or idx] := Op00Cn;
+  For idx := 0 to $F Do
+    Opcodes0[$C0 or idx] := Op00Cn;
 
-  OpcodesF[$29] := OpFx29; OpcodesF[$30] := OpFx30; OpcodesF[$55] := OpFx55; OpcodesF[$65] := OpFx65;
+  OpcodesF[$29] := OpFx29; OpcodesF[$30] := OpFx30;
+  OpcodesF[$55] := OpFx55; OpcodesF[$65] := OpFx65;
+
 End;
 
 Procedure TSChipLegacy11Core.Reset;
@@ -113,6 +116,20 @@ Begin
   // $00FF - Switch to Hires mode, DO NOT clear display
   hiresMode := True;
   DisplayFlag := True;
+End;
+
+Procedure TSChipLegacy11Core.OpDxyn;
+Begin
+
+  // $Dxyn - In 1.1 Legacy Superchip, we add clipped rows to the collision count in hires mode
+
+  ClipCol := 0;
+
+  Inherited;
+
+  If HiresMode Then
+    Regs[$F] := clipCol;
+
 End;
 
 Procedure TSChipLegacy11Core.OpFX29;

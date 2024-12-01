@@ -7,11 +7,11 @@ Uses Windows, Controls, ExtCtrls, Forms, Graphics, SyncObjs, dglOpenGL;
 Procedure InitGL(Handle: hWnd);
 Procedure InitDisplay(FPS, DisplayWidth, DisplayHeight: Integer; Aspect: Boolean; Var Control: TPanel);
 Procedure SetScaling(sWidth, sHeight: Integer);
+Procedure FrameLoop(WaitForSync: Boolean);
 Procedure SwitchFullScreen;
 Procedure Refresh_Display;
 Procedure ResizeDisplay;
 Procedure WaitForSync;
-Procedure FrameLoop;
 Procedure CloseGL;
 
 Var
@@ -223,7 +223,7 @@ Begin
 
 End;
 
-Procedure FrameLoop;
+Procedure FrameLoop(WaitForSync: Boolean);
 Var
   NextFrameTime: Double;
   SleepTime: Integer;
@@ -246,13 +246,17 @@ Begin
 
   End;
 
-  NEXTFRAMETIME := (((FrameCount + 1) * FrameTime) + StartTime);
-  SleepTime := Trunc(NEXTFRAMETIME - GetTicks);
-  If SleepTime >= 1 Then
-    Sleep(SleepTime)
-  Else
-    While GetTicks < NEXTFRAMETIME Do
-      SwitchToThread;
+  If WaitForSync Then Begin
+
+    NEXTFRAMETIME := (((FrameCount + 1) * FrameTime) + StartTime);
+    SleepTime := Trunc(NEXTFRAMETIME - GetTicks);
+    If SleepTime >= 1 Then
+      Sleep(SleepTime)
+    Else
+      While GetTicks < NEXTFRAMETIME Do
+        SwitchToThread;
+
+  End;
 
 End;
 

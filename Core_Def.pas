@@ -24,25 +24,29 @@ Type
     Memory: Array of Byte;
     Regs: Array[0..15] of Byte;
     Stack: Array[0..1023] of LongWord;
-    PC, StackPtr: LongWord;
-    ci, cil, Cycles, mCycles, LastFrameCount,
-    Timer, sTimer, NextFrame, icnt, i,
-    nnn, keyStage, LastS: Integer;
-    sBuffPos: Double;
-    t, x, y, n: Byte;
-    ExitLoop: Boolean;
-    ipf, maxipf: Integer;
-    DispWidth, DispHeight, DispDepth: Integer;
     KeyStates: Array[0..15] of Boolean;
+
+    t, x, y, n: Byte;
+    ipf, maxipf: Integer;
+    PC, StackPtr: LongWord;
+    ExitLoop, DoQuirks, DisplayWait, DxynWrap: Boolean;
+    ci, cil, Cycles, mCycles, LastFrameCount, Timer, sTimer, NextFrame, icnt, i, nnn, keyStage, LastS: Integer;
+
+    DispWidth, DispHeight, DispDepth: Integer;
     DisplayMem, PresentDisplay: Array of Byte;
-    BuzzerTone: Double;
+    sBuffPos, BuzzerTone: Double;
+
+    Procedure Frame(AddCycles: Integer); Virtual;
+    Procedure SetDisplay(Width, Height, Depth: Integer); Virtual;
     Function  GetDisplayInfo: TDisplayInfo; Virtual;
     Procedure Reset; Virtual;
-    Procedure LoadROM(Filename: String); Virtual;
+    Procedure LoadROM(Filename: String; DoReset: Boolean); Virtual;
     Procedure InstructionLoop; Virtual;
     Procedure KeyDown(Key: Integer); Virtual;
     Procedure KeyUp(Key: Integer); Virtual;
     Procedure Present; Virtual;
+    Function  GetMem(Address: Integer): Byte; Virtual;
+    Procedure WriteMem(Address: Integer; Value: Byte); Virtual;
     {$IFDEF DEBUG}
     Procedure Log(Str: String);
     {$ENDIF}
@@ -63,14 +67,21 @@ Const
 
 implementation
 
-Uses SysUtils;
+Uses SysUtils, SyncObjs, Display;
 
 Procedure TCore.Reset;
 Begin
-  //
+  DoQuirks := False;
+  DxynWrap := False;
+  DisplayWait := True;
 End;
 
-Procedure TCore.LoadROM(Filename: String);
+Procedure TCore.Frame(AddCycles: Integer);
+Begin
+
+End;
+
+Procedure TCore.LoadROM(Filename: String; DoReset: Boolean);
 Begin
   //
 End;
@@ -80,9 +91,44 @@ Begin
   //
 End;
 
-Function  TCore.GetDisplayInfo: TDisplayInfo;
+Function  TCore.GetMem(Address: Integer): Byte;
+Begin
+  Result := 0;
+End;
+
+Procedure TCore.WriteMem(Address: Integer; Value: Byte);
 Begin
   //
+End;
+
+Procedure TCore.SetDisplay(Width, Height, Depth: Integer);
+Begin
+
+  DisplayLock.Enter;
+
+  SetLength(DisplayMem, Width * Height);
+  SetLength(PresentDisplay, Length(DisplayMem) * (Depth Div 8));
+  DispWidth := Width; DispHeight := Height;
+  DispDepth := Depth;
+
+  DisplayLock.Leave;
+
+End;
+
+Function  TCore.GetDisplayInfo: TDisplayInfo;
+Begin
+
+  DisplayLock.Enter;
+
+  With Result Do Begin
+    Data := @PresentDisplay[0];
+    Width := DispWidth;
+    Height := DispHeight;
+    Depth := DispDepth;
+  End;
+
+  DisplayLock.Leave;
+
 End;
 
 Procedure TCore.Present;

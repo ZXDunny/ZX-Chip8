@@ -15,7 +15,7 @@ Type
     Procedure BuildTables; Override;
     Procedure Reset; Override;
     Procedure Present; Override;
-    Procedure LoadROM(Filename: String); Override;
+    Procedure LoadROM(Filename: String; DoReset: Boolean); Override;
     Procedure KeyDown(Key: Integer); Override;
     Procedure KeyUp(Key: Integer); Override;
 
@@ -59,7 +59,7 @@ Begin
 
 End;
 
-Procedure TChip8XCore.LoadROM(Filename: String);
+Procedure TChip8XCore.LoadROM(Filename: String; DoReset: Boolean);
 Var
   f: TFileStream;
   bin: Array of Byte;
@@ -73,7 +73,7 @@ Begin
     f.Read(bin[0], f.Size);
     f.Free;
 
-    Reset;
+    If DoReset then Reset;
 
     for idx := 0 to Min(High(bin), High(Memory)) do
       Memory[idx + 768] := bin[idx];
@@ -99,7 +99,7 @@ Begin
   FillMemory(@DisplayMem[0], 64 * 32, 0);
   ColourMap[0] := 2;
 
-  MakeSoundBuffers(61, 4);
+  MakeSoundBuffers(61);
   BuzzerTone := 213;
 
 End;

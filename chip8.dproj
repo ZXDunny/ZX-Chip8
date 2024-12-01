@@ -140,7 +140,7 @@
             <MainSource>MainSource</MainSource>
         </DelphiCompile>
         <DCCReference Include="mainform.pas">
-            <Form>MainForm</Form>
+            <Form>Main</Form>
             <FormType>dfm</FormType>
         </DCCReference>
         <DCCReference Include="Display.pas"/>
@@ -156,6 +156,17 @@
         <DCCReference Include="Core_Chip48.pas"/>
         <DCCReference Include="Core_Chip8x.pas"/>
         <DCCReference Include="Core_RCA1802.pas"/>
+        <DCCReference Include="Browser.pas">
+            <Form>BrowserForm</Form>
+            <FormType>dfm</FormType>
+        </DCCReference>
+        <DCCReference Include="Chip8DB.pas"/>
+        <DCCReference Include="Core_BytePusher.pas"/>
+        <DCCReference Include="Core_Custom.pas"/>
+        <DCCReference Include="CustomCoreDlg.pas">
+            <Form>CustomCoreDialog</Form>
+            <FormType>dfm</FormType>
+        </DCCReference>
         <BuildConfiguration Include="Release">
             <Key>Cfg_2</Key>
             <CfgParent>Base</CfgParent>
@@ -182,6 +193,12 @@
                 </Excluded_Packages>
             </Delphi.Personality>
             <Deployment Version="2">
+                <DeployFile LocalName="chip8.rsm" Configuration="Debug" Class="DebugSymbols">
+                    <Platform Name="Win64">
+                        <RemoteName>chip8.rsm</RemoteName>
+                        <Overwrite>true</Overwrite>
+                    </Platform>
+                </DeployFile>
                 <DeployFile LocalName="chip8.exe" Configuration="Release" Class="ProjectOutput">
                     <Platform Name="Win64">
                         <RemoteName>chip8.exe</RemoteName>
@@ -576,12 +593,12 @@
                         <Operation>1</Operation>
                     </Platform>
                 </DeployClass>
-                <ProjectRoot Platform="Win64" Name="$(PROJECTNAME)"/>
+                <ProjectRoot Platform="iOSSimulator" Name="$(PROJECTNAME).app"/>
                 <ProjectRoot Platform="Android" Name="$(PROJECTNAME)"/>
                 <ProjectRoot Platform="Win32" Name="$(PROJECTNAME)"/>
                 <ProjectRoot Platform="iOSDevice64" Name="$(PROJECTNAME).app"/>
+                <ProjectRoot Platform="Win64" Name="$(PROJECTNAME)"/>
                 <ProjectRoot Platform="OSX32" Name="$(PROJECTNAME).app"/>
-                <ProjectRoot Platform="iOSSimulator" Name="$(PROJECTNAME).app"/>
                 <ProjectRoot Platform="iOSDevice32" Name="$(PROJECTNAME).app"/>
             </Deployment>
             <Platforms>

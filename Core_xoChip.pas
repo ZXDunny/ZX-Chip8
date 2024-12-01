@@ -91,6 +91,8 @@ Begin
   For Idx := 0 To $F Do PatternBuffer[idx] := $F0;
   PatternOffset := 0;
   PatternPitch := 64;
+  DisplayWait := False;
+  DxynWrap := True;
 
 End;
 
@@ -108,7 +110,7 @@ End;
 Procedure TXOChipCore.DoSoundTimer;
 Var
   dcIn, dcOut: Boolean;
-  idx, s1, s2, po, Level, nRate, fr: Integer;
+  idx, po, Level, nRate: Integer;
 Begin
   If sTimer > 0 Then Begin
     Dec(sTimer);
@@ -122,10 +124,7 @@ Begin
 
     While idx < BuffSize Do Begin
       po := PatternOffset shr 16;
-      s1 := Ord(PatternBuffer[(po Shr 3) and 15] and (1 shl (7 - (po and 7))) <> 0);
-      s2 := Ord(PatternBuffer[((po + 1) Shr 3) and 15] and (1 shl (7 - ((po + 1) and 7))) <> 0);
-      fr := PatternOffset and $FFFF;
-      Level := ($8000 * ((s1 * ($10000 - fr)) + (s2 * fr)) shr 16) - $7FFF;
+      Level := $8000 * Ord(PatternBuffer[(po Shr 3) and 15] and (1 shl (7 - (po and 7))) <> 0) - $7FFF;
       pSmallInt(@FrameBuffer[idx])^ := Level;
       pSmallInt(@FrameBuffer[idx + 2])^ := Level;
       PatternOffset := (PatternOffset + nRate) and $7FFFFF;
@@ -265,7 +264,7 @@ Procedure TXOChipCore.Op5xy3;
 Var
   z: Integer;
 Begin
-  // 5xy2 - Restore Vx to Vy from memory at I
+  // 5xy3 - Restore Vx to Vy from memory at I
   x := (ci Shr 8) And $F;
   y := (ci Shr 4) And $F;
   If x < y Then Begin
@@ -317,7 +316,7 @@ End;
 
 Procedure TXOChipCore.OpDxyn;
 Var
-  cc, row, col, c, w, h, p, ox, oy, ic: Integer;
+  cc, row, col, c, w, h, p, ox, oy, ic, lx, ly: Integer;
   bit, b, bts, Addr: LongWord;
   np, pm: Byte;
 
@@ -356,11 +355,19 @@ Begin
     If DisplayMask And pm <> 0 Then
       If n = 0 Then Begin
         // Dxy0 - 16x16 sprite
-        For row := 0 to 15 Do Begin
+        If DoQuirks And Not DxynWrap Then
+          ly := Min(15, 63 - y)
+        Else
+          ly := 15;
+        For row := 0 to ly Do Begin
           b := GetMem(ic + row * 2) Shl 8 + GetMem(ic + 1 + row * 2);
           bit := $8000;
           c := 0;
-          For col := 0 To 15 Do Begin
+          If DoQuirks And Not DxynWrap Then
+            lx := Min(15, 127 - x)
+          else
+            lx := 15;
+          For col := 0 To lx Do Begin
             bts := Ord(b And bit > 0);
             bit := bit Shr 1;
             If bts > 0 Then XorPixel;
@@ -371,11 +378,19 @@ Begin
         Inc(ic, 32);
       End Else Begin
         // Dxyn - 8xn sprite
-        For row := 0 To n -1 Do Begin
+        If DoQuirks And Not DxynWrap Then
+          ly := Min(n - 1, 63 - y)
+        Else
+          ly := n - 1;
+        For row := 0 To ly Do Begin
           b := GetMem(ic + row);
           bit := $80;
           c := 0;
-          For col := 0 To 7 Do Begin
+          If DoQuirks And Not DxynWrap Then
+            lx := Min(7, 127 - x)
+          else
+            lx := 7;
+          For col := 0 To lx Do Begin
             bts := Ord(b And bit > 0);
             bit := bit Shr 1;
             If bts > 0 Then XorPixel;
@@ -387,7 +402,8 @@ Begin
       End;
   End;
   Regs[$F] := Ord(cc <> 0);
-
+  If DisplayWait Then
+    iCnt := ipf -1;
   DisplayFlag := True;
 End;
 

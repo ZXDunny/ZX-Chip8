@@ -67,7 +67,6 @@ Var
 Begin
 
   if FileExists(Filename) Then Begin
-    ROMName := Filename;
     f := TFileStream.Create(Filename, fmOpenRead or fmShareDenyNone);
     SetLength(bin, f.Size);
     f.Read(bin[0], f.Size);
@@ -75,7 +74,7 @@ Begin
 
     If DoReset then Reset;
 
-    for idx := 0 to Min(High(bin), High(Memory)) do
+    for idx := 0 to Min(High(bin), High(Memory) - 768) do
       Memory[idx + 768] := bin[idx];
 
     PC := 768;
@@ -99,7 +98,8 @@ Begin
   FillMemory(@DisplayMem[0], 64 * 32, 0);
   ColourMap[0] := 2;
 
-  MakeSoundBuffers(61);
+  FPS := 61;
+  MakeSoundBuffers(FPS, Audio);
   BuzzerTone := 213;
 
 End;

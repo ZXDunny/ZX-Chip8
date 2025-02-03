@@ -23,6 +23,7 @@ Type
     CurCPUModel: Integer;
     Quirks: TQuirkSettings;
     DoFrame: Boolean;
+    Destructor Destroy; Override;
     Procedure SetCustomSettings(SetQuirks: TQuirkSettings);
     Procedure Reset; Override;
     Procedure LoadROM(Filename: String; DoReset: Boolean); Override;
@@ -34,6 +35,12 @@ Type
     Procedure KeyUp(Key: Integer); Override;
     Procedure ApplyQuirks;
     Procedure Frame(AddCycles: Integer); Override;
+    Function  GetSTimer: Integer; Override;
+    Function  GetBuzzerLevel: Double; Override;
+    Function  GetBuzzerColor: LongWord; Override;
+    Function  GetSilenceColor: LongWord; Override;
+    Procedure SetBuzzerColor(Clr: LongWord); Override;
+    Procedure SetSilenceColor(Clr: LongWord); Override;
 
     Procedure Op8xy1_Quirk;   Procedure Op8xy1_Regular;
     Procedure Op8xy2_Quirk;   Procedure Op8xy2_Regular;
@@ -56,6 +63,14 @@ Const
 implementation
 
 Uses Windows, Chip8Int, Core_Chip8X, Core_Chip48, Core_sChipLegacy10, Core_sChipLegacy11, Core_sChipModern, Core_xoChip, Core_MegaChip;
+
+Destructor TCustomCore.Destroy;
+Begin
+
+  BaseType.Free;
+  Inherited;
+
+End;
 
 Procedure TCustomCore.SetCustomSettings(SetQuirks: TQuirkSettings);
 Begin
@@ -152,8 +167,39 @@ Begin
 
 End;
 
+Procedure TCustomCore.SetBuzzerColor(Clr: LongWord);
+Begin
+  BaseType.SetBuzzerColor(Clr);
+End;
+
+Procedure TCustomCore.SetSilenceColor(Clr: LongWord);
+Begin
+  BaseType.SetSilenceColor(Clr);
+End;
+
+Function TCustomCore.GetSTimer: Integer;
+Begin
+  Result := BaseType.GetSTimer;
+End;
+
+Function TCustomCore.GetBuzzerLevel: Double;
+Begin
+  Result := BaseType.GetBuzzerLevel;
+End;
+
+Function  TCustomCore.GetBuzzerColor: LongWord;
+Begin
+  Result := BaseType.GetBuzzerColor;
+End;
+
+Function  TCustomCore.GetSilenceColor: LongWord;
+Begin
+  Result := BaseType.GetSilenceColor;
+End;
+
 Procedure TCustomCore.Reset;
 Begin
+  BaseType.Audio := Audio;
   BaseType.Reset;
   ApplyQuirks;
 End;
@@ -167,6 +213,7 @@ End;
 Procedure TCustomCore.InstructionLoop;
 Begin
   BaseType.InstructionLoop;
+  emuLastFrameTime := BaseType.emuLastFrameTime;
 End;
 
 Procedure TCustomCore.SetDisplay(Width, Height, Depth: Integer);

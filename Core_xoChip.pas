@@ -24,8 +24,7 @@ Type
     Procedure Op9xy0; Override; Procedure OpDxyn; Override; Procedure OpEx9E; Override; Procedure OpExA1; Override;
     Procedure Op00Cn; Override; Procedure Op00FB; Override; Procedure Op00FC; Override; Procedure Op8xy6; Override;
     Procedure OpFx55; Override; Procedure OpFx65; Override; Procedure OpBnnn; Override; Procedure Op8xyE; Override;
-    Procedure OpFx18; Override; Procedure OpFx1E; Override; Procedure OpFx75; Override; Procedure OpFx85; Override;
-    Procedure OpFx3A;
+    Procedure OpFx18; Override; Procedure OpFx1E; Override; Procedure OpFx3A;
 
     // New xo-Chip opcodes
 
@@ -36,7 +35,7 @@ Type
 
 implementation
 
-Uses Windows, SysUtils, Classes, Math, Chip8Int, Display, Sound;
+Uses Windows, SysUtils, Classes, Math, Chip8Int, Display, Sound, Fonts;
 
 Procedure TXOChipCore.BuildTables;
 Var
@@ -58,11 +57,10 @@ Begin
     Opcodes0[$D0 or idx] := Op00Dn;
   End;
 
-  Opcodes5[0] := Op5xy0; Opcodes5[2] := Op5xy2; Opcodes5[3] := Op5xy3; Opcodes5[4] := Op5xy4;
-  Opcodes8[6] := Op8xy6; Opcodes8[$E] := Op8xyE; OpcodesE[$9E] := OpEx9E; OpcodesE[$A1] := OpExA1;
-  OpcodesF[$1E] := OpFx1E; OpcodesF[$55] := OpFx55; OpcodesF[$65] := OpFx65; OpcodesF[$75] := OpFx75;
-  OpcodesF[$85] := OpFx85; OpcodesF[$00] := OpF000; OpcodesF[$01] := OpFn01; OpcodesF[$02] := OpF002;
-  OpcodesF[$3A] := OpFx3A; OpcodesF[$18] := OpFx18;
+  Opcodes5[0]   := Op5xy0; Opcodes5[2]   := Op5xy2; Opcodes5[3]   := Op5xy3; Opcodes5[4]   := Op5xy4;
+  Opcodes8[6]   := Op8xy6; Opcodes8[$E]  := Op8xyE; OpcodesE[$9E] := OpEx9E; OpcodesE[$A1] := OpExA1;
+  OpcodesF[$1E] := OpFx1E; OpcodesF[$55] := OpFx55; OpcodesF[$65] := OpFx65; OpcodesF[$00] := OpF000;
+  OpcodesF[$01] := OpFn01; OpcodesF[$02] := OpF002; OpcodesF[$3A] := OpFx3A; OpcodesF[$18] := OpFx18;
 
 End;
 
@@ -87,7 +85,7 @@ Begin
 
   Inherited;
   DisplayMask := 1;
-  For idx := 0 To 159 Do Memory[idx + 160] := xoChipFont[idx];
+  LoadFont(Self, Font_Large_xo);
   For Idx := 0 To $F Do PatternBuffer[idx] := $F0;
   PatternOffset := 0;
   PatternPitch := 64;
@@ -112,33 +110,40 @@ Var
   dcIn, dcOut: Boolean;
   idx, po, Level, nRate: Integer;
 Begin
-  If sTimer > 0 Then Begin
-    Dec(sTimer);
-    dcIn := LastS = 0;
-    dcOut := sTimer = 0;
 
-    // Generate tones based on the pattern buffer
+  With Audio^ Do Begin
 
-    idx := 0;
-    nRate := Round(((4000 * Power(2, (PatternPitch - 64) / 48)) / 44100) * $10000);
+    If sTimer > 0 Then Begin
+      Dec(sTimer);
+      dcIn := LastS = 0;
+      dcOut := sTimer = 0;
 
-    While idx < BuffSize Do Begin
-      po := PatternOffset shr 16;
-      Level := $8000 * Ord(PatternBuffer[(po Shr 3) and 15] and (1 shl (7 - (po and 7))) <> 0) - $7FFF;
-      pSmallInt(@FrameBuffer[idx])^ := Level;
-      pSmallInt(@FrameBuffer[idx + 2])^ := Level;
-      PatternOffset := (PatternOffset + nRate) and $7FFFFF;
-      Inc(idx, 4);
-    End;
+      // Generate tones based on the pattern buffer
 
-    If sTimer = 0 Then PatternOffset := 0;
+      idx := 0;
+      nRate := Round(((4000 * Power(2, (PatternPitch - 64) / 48)) / sHz) * $10000);
 
-    DeClick(dcIn, dcOut);
+      While idx < BuffSize Do Begin
+        po := PatternOffset shr 16;
+        Level := $8000 * Ord(PatternBuffer[(po Shr 3) and 15] and (1 shl (7 - (po and 7))) <> 0) - $7FFF;
+        pSmallInt(@FrameBuffer[idx])^ := Level;
+        pSmallInt(@FrameBuffer[idx + 2])^ := Level;
+        PatternOffset := (PatternOffset + nRate) and $7FFFFF;
+        Inc(idx, 4);
+      End;
 
-  End Else
-    For Idx := 0 To BuffSize -1 Do
-      FrameBuffer[Idx] := 0;
-  LastS := sTimer;
+      If sTimer = 0 Then PatternOffset := 0;
+
+      DeClick(dcIn, dcOut, Audio);
+      SoundFlag := 1;
+
+    End Else
+      For Idx := 0 To BuffSize -1 Do
+        FrameBuffer[Idx] := 0;
+    LastS := sTimer;
+
+  End;
+
 End;
 
 // Begin Core opcodes
@@ -408,17 +413,29 @@ Begin
 End;
 
 Procedure TXOChipCore.OpEx9E;
+Var
+  Key: integer;
 Begin
   // Advance PC if key in x is down
-  t := 2 * Ord(KeyStates[Regs[(ci Shr 8) And $F] And $F]);
+  Key := Regs[(ci Shr 8) And $F] And $F;
+  If Press_Fx0A And (Key = LastFx0A) Then
+    t := 0
+  Else
+    t := 2 * Ord(KeyStates[Key]);
   If t > 0 Then SkipF000;
   Inc(PC, t);
 End;
 
 Procedure TXOChipCore.OpExA1;
+Var
+  Key: integer;
 Begin
   // Advance PC if key in x is up
-  t := 2 * Ord(Not KeyStates[Regs[(ci Shr 8) And $F] And $F]);
+  Key := Regs[(ci Shr 8) And $F] And $F;
+  If Press_Fx0A And (Key = LastFx0A) Then
+    t := 2
+  Else
+    t := 2 * Ord(Not KeyStates[Key]);
   If t > 0 Then SkipF000;
   Inc(PC, t);
 End;
@@ -482,26 +499,6 @@ Begin
   x := (ci Shr 8) And $F;
   For idx := 0 To x Do Regs[idx] := GetMem(i + idx);
   Inc(i, x +1);
-End;
-
-Procedure TXOChipCore.OpFx75;
-Var
-  i: Integer;
-Begin
-  // Fx75 - Save registers to storage
-  x := (ci Shr 8) And $F;
-  For i := 0 To Min(x, 15) Do
-    Storage[i] := Regs[i];
-End;
-
-Procedure TXOChipCore.OpFx85;
-Var
-  i: Integer;
-Begin
-  // Fx85 - Load registers from storage
-  x := (ci Shr 8) And $F;
-  For i := 0 To Min(x, 15) Do
-    Regs[i] := Storage[i];
 End;
 
 end.

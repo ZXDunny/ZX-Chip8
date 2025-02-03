@@ -2,12 +2,22 @@ unit Display;
 
 interface
 
-Uses Windows, Controls, ExtCtrls, Forms, Graphics, SyncObjs, dglOpenGL;
+Uses Windows, Controls, ExtCtrls, Forms, Classes, Graphics, SyncObjs, dglOpenGL;
+
+Type
+
+  TRenderThread = Class(TThread)
+    Dead: Boolean;
+    LastFrame: Integer;
+    Procedure Execute; override;
+  End;
 
 Procedure InitGL(Handle: hWnd);
 Procedure InitDisplay(FPS, DisplayWidth, DisplayHeight: Integer; Aspect: Boolean; Var Control: TPanel);
+Function  GetTicks: Double;
+Procedure ScaleBuffers(pSrc, pDst: pLongWord; SrcW, SclFact, x1, x2, y1, y2: Integer);
 Procedure SetScaling(sWidth, sHeight: Integer);
-Procedure FrameLoop(WaitForSync: Boolean);
+Procedure FrameLoop;
 Procedure SwitchFullScreen;
 Procedure Refresh_Display;
 Procedure ResizeDisplay;
@@ -22,18 +32,47 @@ Var
   DisplayUpdate, DoScale, FullScreen, MaintainAspect, DisplayReady: Boolean;
   intWidth, intHeight, scaleWidth, scaleHeight, winWidth, winHeight, ScaleFactor, FrameCount, LastFrames,
   DisplayWidth, DisplayHeight, lastWinX, lastWinY, lastWinWidth, lastWinHeight: Integer;
+  StartTime, LastFrameCount, FrameTime, LastTicks, LastFrameDuration, LastFrameTime, LastFrameStart: Double;
   DisplayArray, ScaledArray: Array of LongWord;
   BaseTime, TimerFreq: Int64;
-  StartTime, FrameTime: Double;
   GLX, GLY, GLW, GLH: Integer;
   bStyle: TFormBorderStyle;
   BackRed, BackGreen, BackBlue: Single;
   GLPanel: ^TPanel;
   DisplayLock: TCriticalSection;
+  RenderThread: TRenderThread;
 
 implementation
 
-Uses MainForm, Math, Classes;
+Uses MainForm, Math;
+
+Procedure TRenderThread.Execute;
+Var
+  LaunchTime, CurTime, VideoFPS: Double;
+  CurFrame: Integer;
+Begin
+
+  Dead := False;
+  VideoFPS := 1000/60;
+  LaunchTime := GetTicks;
+  FreeOnTerminate := True;
+  NameThreadForDebugging('Render Thread');
+
+  While Not Terminated Do Begin
+
+    CurTime := GetTicks;
+    CurFrame := Trunc((CurTime - LaunchTime) / VideoFPS);
+
+    If CurFrame <> LastFrame Then Begin
+      PostMessage(Main.Handle, WM_Render, 0, 0);
+      LastFrame := CurFrame;
+    End;
+
+  End;
+
+  Dead := True;
+
+End;
 
 Procedure InitTimer;
 Begin
@@ -41,6 +80,9 @@ Begin
   QueryPerformanceFrequency(TimerFreq);
   QueryPerformanceCounter(BaseTime);
   TimerFreq := Round(TimerFreq / 1000);
+
+  If Not Assigned(RenderThread) then
+    RenderThread := TRenderThread.Create(False);
 
 End;
 
@@ -75,7 +117,7 @@ begin
   with pfd do begin
     nSize:= SizeOf( PIXELFORMATDESCRIPTOR );
     nVersion:= 1;
-    dwFlags:= PFD_DRAW_TO_WINDOW or PFD_SUPPORT_OPENGL or PFD_DOUBLEBUFFER or PFD_SWAP_COPY;
+    dwFlags:= PFD_DRAW_TO_WINDOW or PFD_SUPPORT_OPENGL;
     iPixelType:= PFD_TYPE_RGBA;
     cColorBits:= 32;
     cRedBits:= 0;
@@ -106,7 +148,6 @@ begin
   RC := wglCreateContext(DC);
   ActivateRenderingContext(DC, RC);
   wglMakeCurrent(DC, RC);
-  wglSwapIntervalEXT(1);
 
 End;
 
@@ -135,7 +176,7 @@ Begin
 
   glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, ScaleWidth, ScaleHeight, 0, GL_RGBA, GL_UNSIGNED_BYTE, Nil);
 
-  If (winWidth/intWidth = Floor(winWidth/intWidth)) And (winHeight/intHeight = Floor(winHeight/intHeight)) Then Begin
+  If ((winWidth/intWidth = Floor(winWidth/intWidth)) And (winHeight/intHeight = Floor(winHeight/intHeight))) or (ScaleFactor = 1) Then Begin
 
     glTexParameterI(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     glTexParameterI(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
@@ -148,7 +189,6 @@ Begin
   End;
 
   glEnable(GL_TEXTURE_2D);
-  wglSwapIntervalEXT(1);
 
 End;
 
@@ -159,6 +199,13 @@ Begin
   wglDeleteContext(RC);
   ReleaseDC(GLHandle, DC);
   DeleteDC(DC);
+
+  If Assigned(RenderThread) Then Begin
+    RenderThread.Terminate;
+    Repeat
+      Sleep(1);
+    Until RenderThread.Dead;
+  End;
 
 End;
 
@@ -186,6 +233,7 @@ Begin
   InitTimer;
   StartTime := 0;
   FrameTime := 1000/FPS;
+  LastTicks := GetTicks;
   DisplayUpdate := False;
 
   DisplayReady := True;
@@ -214,8 +262,14 @@ Begin
     DoScale := (sWidth/intWidth >= 1.5) or (sHeight/intHeight >= 1.5);
     ScaleFactor := Max(Round(sWidth/intWidth), Round(sHeight/intHeight));
     If ScaleFactor = 0 Then
-      ScaleFactor := 1;
+      ScaleFactor := 1
+    Else
+      If ScaleFactor > 8 Then Begin
+        DoScale := False;
+        ScaleFactor := 1;
+      End;
   End;
+
   ScaleWidth := ScaleFactor * intWidth;
   ScaleHeight := ScaleFactor * intHeight;
   SetLength(ScaledArray, ScaleWidth * ScaleHeight);
@@ -223,89 +277,68 @@ Begin
 
 End;
 
-Procedure FrameLoop(WaitForSync: Boolean);
+Procedure FrameLoop;
 Var
-  NextFrameTime: Double;
-  SleepTime: Integer;
-  CurTime: Double;
+  FrameStart, FrameEnd: Double;
 Begin
 
-  CurTime := GetTicks;
-  FrameCount := Trunc((CurTime - StartTime) / FrameTime);
 
-  If FrameCount <> LastFrames Then begin
+  FrameStart := GetTicks;
+  If StartTime = 0 Then
+    StartTime := FrameStart;
+  FrameCount := Trunc((FrameStart - StartTime) / FrameTime); // Emulated frame
 
-    LastFrames := FrameCount;
+  Refresh_Display;
 
-    If DisplayUpdate Then Begin
-      If StartTime = 0 Then
-        StartTime := GetTicks;
-      Refresh_Display;
-    End;
-    DisplayUpdate := False;
+  FrameEnd := GetTicks;
+  LastFrameDuration := FrameEnd - FrameStart;
+  LastFrameTime := FrameStart - LastFrameStart;
+  LastFrameStart := FrameStart;
 
-  End;
-
-  If WaitForSync Then Begin
-
-    NEXTFRAMETIME := (((FrameCount + 1) * FrameTime) + StartTime);
-    SleepTime := Trunc(NEXTFRAMETIME - GetTicks);
-    If SleepTime >= 1 Then
-      Sleep(SleepTime)
-    Else
-      While GetTicks < NEXTFRAMETIME Do
-        SwitchToThread;
-
-  End;
+  DisplayUpdate := False;
 
 End;
 
-Procedure ScaleBuffers(x1, x2, y1, y2: Integer);
+Procedure ScaleBuffers(pSrc, pDst: pLongWord; SrcW, SclFact, x1, x2, y1, y2: Integer);
 var
   w,w2,x,y,i: Integer;
   ps,pd,lpd: pLongWord;
 begin
 
   w2 := (x2 - x1) +1;              // Width of area to scale
-  w := w2 * 4 * ScaleFactor;       // Same value scaled. Source is 8bpp, dest is 32bpp
-  ps := @DisplayArray[0];          // Source
-  pd := @ScaledArray[0];           // Dest
-  Inc(ps, (y1 * intWIDTH) + x1);   // Find source topleft pixel
-  Inc(pd, (y1 * ScaleFactor * ScaleWidth) + (x1 * ScaleFactor)); // And dest
+  w := w2 * 4 * SclFAct;           // Same value scaled. Source is 8bpp, dest is 32bpp
+  ps := pSrc;                      // Source - @DisplayArray[0]
+  pd := pDst;                      // Dest - @ScaledArray[0]
+  Inc(ps, (y1 * srcW) + x1);       // Find source topleft pixel
+  Inc(pd, (y1 * SclFAct) + (x1 * SclFAct)); // And dest
   for y := y1 to y2 do begin
     lpd := pd;
     for x := x1 to x2 do begin     // Scale columns
-      For i := 1 To ScaleFactor Do Begin
+      For i := 1 To SclFAct Do Begin
         pd^ := ps^;
         Inc(pd);
       End;
       Inc(ps);
     end;
-    pd := pLongWord(NativeUint(pd) + (ScaleWidth * 4) - w); // Find next row
-    Inc(ps, intWIDTH - w2);                                 // in both dest and src
-    For i := 1 to ScaleFactor -1 Do Begin // Copy rows
+    pd := pLongWord(NativeUint(pd) + (srcW * SclFAct * 4) - w); // Find next row
+    Inc(ps, srcW - w2);                                         // in both dest and src
+    For i := 1 to SclFAct -1 Do Begin                           // Copy rows
       Move(lpd^, pd^, w);
-      Inc(pd, ScaleWidth);
+      Inc(pd, srcW * SclFAct);
     End;
   end;
 end;
 
 Procedure Refresh_Display;
 Var
-  DC: hDc;
-  t: Int64;
-  x, y, w, h, tmp: Integer;
+  x, y, w, h: Integer;
 Begin
 
-  DC := wglGetCurrentDC;
-
-  glDisable(gl_MULTISAMPLE_ARB);
   glLoadIdentity;
-  glUseProgramObjectARB(0);
 
   If DoScale Then Begin
     If (GLH > 0) And (GLW > 0) Then Begin
-      ScaleBuffers(GLX, GLX + GLW -1, GLY, GLY + GLH -1);
+      ScaleBuffers(@DisplayArray[0], @ScaledArray[0], intWidth, ScaleFactor, GLX, GLX + GLW -1, GLY, GLY + GLH -1);
       x := GLX * ScaleFactor;
       y := GLY * ScaleFactor;
       w := GLW * ScaleFactor;
@@ -320,11 +353,7 @@ Begin
     End;
   End;
 
-  If FullScreen Then
-    glClearColor(0, 0, 0, 0)
-  Else
-    glClearColor(backRed, backGreen, backBlue, 0);
-
+  glClearColor(backRed, backGreen, backBlue, 0);
   glClear(GL_COLOR_BUFFER_BIT);
 
   glBegin(GL_QUADS);
@@ -334,13 +363,7 @@ Begin
   glTexCoord2D(0, 1); glVertex2D(0, winHeight);
   glEnd;
 
-  glGetIntegerv(GL_UNPACK_ROW_LENGTH, @tmp);
-  glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
-  glGetInteger64v(GL_TIMESTAMP, @t);
-  glFinish;
   glFlush;
-
-  SwapBuffers(DC);
 
 End;
 

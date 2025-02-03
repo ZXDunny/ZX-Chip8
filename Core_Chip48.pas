@@ -11,6 +11,7 @@ Type
     Procedure InstructionLoop; Override;
     Procedure BuildTables; Override;
     Procedure Reset; Override;
+    Procedure Frame(AddCycles: Integer); Override;
 
     Procedure OpFx55; Override; Procedure OpFx65; Override;
     Procedure Op8xy6; Override; Procedure Op8xyE; Override;
@@ -41,8 +42,14 @@ Begin
   Inherited;
 
   maxipf := 20;
-  MakeSoundBuffers(64);
+  FPS := 64;
+  MakeSoundBuffers(FPS, Audio);
 
+End;
+
+Procedure TChip48Core.Frame(AddCycles: Integer);
+Begin
+  // Ignore
 End;
 
 Procedure TChip48Core.InstructionLoop;
@@ -58,15 +65,18 @@ Begin
     OpCodes[ci Shr 12];
     Inc(icnt);
 
-  Until iCnt >= maxipf;
+  Until FrameDone(iCnt >= maxipf);
 
   If Timer > 0 then Dec(Timer);
+  emuFrameLength := GetTicks - emuLastTicks;
   DoSoundTimer;
 
   If DisplayFlag Then Present;
 
-  InjectSound(@FrameBuffer[0], Not FullSpeed);
+  Inc(iFrameCount);
+  InjectSound(Audio, Not FullSpeed);
 
+  GetTimings;
   If FullSpeed Then
     Inc(ipf, icnt)
   Else Begin

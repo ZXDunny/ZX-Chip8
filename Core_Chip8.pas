@@ -31,7 +31,7 @@ Type
 
 implementation
 
-Uses Windows, SysUtils, Classes, Math, Chip8Int, Display;
+Uses Windows, SysUtils, Classes, Math, Chip8Int, Display, Fonts;
 
 Procedure TChip8Core.Present;
 Begin
@@ -86,7 +86,7 @@ Begin
   If (Address < 0) or (Address > $FFF) Then
     Result := 0
   Else
-    Result := Memory[Address And $FFF];
+    Result := Memory[Address];
 
 End;
 
@@ -117,7 +117,8 @@ Begin
   PC := $200;
   maxIPF := 3668;
 
-  MakeSoundBuffers(60);
+  FPS := 60;
+  MakeSoundBuffers(FPS, Audio);
   BuzzerTone := 1400;
   sBuffPos := 0;
   LastS := 0;
@@ -129,8 +130,10 @@ Begin
   For idx := 0 To 15 Do
     Regs[idx] := 0;
 
-  for idx := 0 to 79 Do
-    Memory[idx + 80] := Font[idx];
+  LoadFont(Self, Font_Small_VIP);
+
+  For idx := 0 To 50 Do
+    Memory[$200 + idx] := BootROM[idx];
 
   If Length(DisplayMem) > 0 Then
     FillMemory(@DisplayMem[0], Length(DisplayMem), 0);
@@ -148,7 +151,6 @@ Var
 Begin
 
   if FileExists(Filename) Then Begin
-    ROMName := Filename;
     f := TFileStream.Create(Filename, fmOpenRead or fmShareDenyNone);
     SetLength(bin, f.Size);
     f.Read(bin[0], f.Size);
@@ -156,7 +158,7 @@ Begin
 
     If DoReset Then Reset;
 
-    for idx := 0 to Min(High(bin), High(Memory)) do
+    for idx := 0 to Min(High(bin), High(Memory) - 512) do
       Memory[idx + 512] := bin[idx];
 
     PC := 512;
@@ -198,27 +200,30 @@ Var
   dcIn, dcOut: Boolean;
   t, StepSize: Double;
 Const
-  CycleLength = 1024;
+  CycleLength = 1;
 Begin
   // If Sound Timer > 0 then generate a tone.
-  If sTimer > 0 Then Begin
-    Dec(sTimer);
-    dcIn := LastS = 0;
-    dcOut := sTimer = 0;
-    sPos := 0;
-    stepSize := (BuzzerTone * CycleLength) / sHz;
-    While sPos < BuffSize Do Begin
-      t := sBuffPos * 6.283 / CycleLength;
-      oSample := Round(16384 * (Sin(t) + Sin(t * 3) / 3));
-      pWord(@FrameBuffer[sPos])^ := oSample;
-      pWord(@FrameBuffer[sPos + 2])^ := oSample;
-      sBuffPos := FMod(sBuffPos + stepSize, CycleLength);
-      Inc(sPos, 4);
-    end;
-    DeClick(dcIn, dcOut);
-  End Else
-    For Idx := 0 To BuffSize -1 Do
-      FrameBuffer[Idx] := 0;
+  With Audio^ Do Begin
+    If sTimer > 0 Then Begin
+      Dec(sTimer);
+      dcIn := LastS = 0;
+      dcOut := sTimer = 0;
+      sPos := 0;
+      stepSize := (BuzzerTone * CycleLength) / sHz;
+      While sPos < BuffSize Do Begin
+        t := sBuffPos * 6.283 / CycleLength;
+        oSample := Round(16383 * (Sin(t) + Sin(t * 3) / 2));
+        pWord(@FrameBuffer[sPos])^ := oSample;
+        pWord(@FrameBuffer[sPos + 2])^ := oSample;
+        sBuffPos := FMod(sBuffPos + stepSize, CycleLength);
+        Inc(sPos, 4);
+      end;
+      DeClick(dcIn, dcOut, Audio);
+      SoundFlag := 1;
+    End Else
+      For Idx := 0 To BuffSize -1 Do
+        FrameBuffer[Idx] := 0;
+  End;
   LastS := sTimer;
 End;
 
@@ -231,17 +236,22 @@ Begin
 
   Inc(mCycles, AddCycles);
 
-  If mCycles >= NextFrame Then Begin
+  If FrameDone(mCycles >= NextFrame) Then Begin
     If Timer > 0 then Dec(Timer);
+    emuFrameLength := GetTicks - emuLastTicks;
     DoSoundTimer;
     If DisplayFlag Then Present;
-    InjectSound(@FrameBuffer[0], Not FullSpeed);
-
+    InjectSound(Audio, Not FullSpeed);
     cycleScale := maxIPF/3668;
     Inc(mCycles, 1832 + (Ord(stimer <> 0) * 4) + (Ord(timer <> 0) * 8) - maxIPF);
     NextFrame := ((mCycles + Round(2572 * cycleScale)) div maxIPF) * maxIPF + Round(1096 * cycleScale);
 
+    Inc(iFrameCount);
     ExitLoop := True;
+
+    // Metrics
+
+    GetTimings;
     ipf := icnt;
     icnt := 0;
   End;
@@ -265,10 +275,11 @@ End;
 Procedure TChip8Core.Op00E0;
 Begin
   // $00E0 - Clear display
+  Frame(3078);
   FillMemory(@DisplayMem[0], Length(DisplayMem), 0);
   DisplayFlag := True;
-  Cycles := 3078;
 End;
+
 
 Procedure TChip8Core.Op00EE;
 Begin
@@ -474,22 +485,25 @@ Begin
   cx := Regs[(ci Shr 8) And $F] And 63;
   cy := Regs[(ci Shr 4) And $F] And 31;
   bOffs := cx And 7;
-  If Not DoQuirks Or DisplayWait Then Begin
-    pCycles := 68 + n * (46 + 20 * bOffs);
-    Cycles := NextFrame - mCycles;
-    lc := Max(pCycles - Cycles, 0);
-    Repeat
-      Frame(Cycles);
-      olc := lc;
-      If lc > 0 Then Begin
-        If lc > NextFrame - mCycles Then
-          Dec(lc, NextFrame - mCycles)
-        Else
-          lc := 0;
-        Cycles := NextFrame - mCycles;
+  If not FullSpeed Then
+    If Not DoQuirks Or DisplayWait Then Begin
+      pCycles := 68 + n * (46 + 20 * bOffs);
+      Cycles := NextFrame - mCycles;
+      If NextFrame > 0 Then Begin
+        lc := Max(pCycles - Cycles, 0);
+        Repeat
+          Frame(Cycles);
+          olc := lc;
+          If lc > 0 Then Begin
+            If lc > NextFrame - mCycles Then
+              Dec(lc, NextFrame - mCycles)
+            Else
+              lc := 0;
+            Cycles := NextFrame - mCycles;
+          End;
+        Until olc <= 0;
       End;
-    Until olc <= 0;
-  End;
+    End;
   Cycles := 26;
   If Not DoQuirks or Not DxynWrap Then
     ly := Min(n - 1, 32 - cy -1)
@@ -526,17 +540,29 @@ Begin
 End;
 
 Procedure TChip8Core.OpEx9E;
+Var
+  Key: Integer;
 Begin
   // Advance PC if key in x is down
-  t := 2 * Ord(KeyStates[Regs[(ci Shr 8) And $F] And $F]);
+  Key := Regs[(ci Shr 8) And $F] And $F;
+  If Press_Fx0A And (Key = LastFx0A) Then
+    t := 0
+  Else
+    t := 2 * Ord(KeyStates[Key]);
   Inc(PC, t);
   Cycles := 14 + 2 * t;
 End;
 
 Procedure TChip8Core.OpExA1;
+Var
+  Key: Integer;
 Begin
   // Advance PC if key in x is up
-  t := 2 * Ord(Not KeyStates[Regs[(ci Shr 8) And $F] And $F]);
+  Key := Regs[(ci Shr 8) And $F] And $F;
+  If Press_Fx0A And (Key = LastFx0A) Then
+    t := 2
+  Else
+    t := 2 * Ord(Not KeyStates[Key]);
   Inc(PC, t);
   Cycles := 14 + 2 * t;
 End;
@@ -560,23 +586,45 @@ Var
 Begin
   // Fx0A - Wait for KeyPress
   Dec(PC, 2);
-  Cycles := NextFrame - mCycles;
+  Frame(NextFrame - mCycles);
   Case keyStage of
-    0: keyStage := 1;
+    0:
+      Begin
+        keyStage := 1;
+      End;
     1:
       Begin
         For idx := 0 To 15 Do
           If KeyStates[idx] Then Begin
             Regs[(ci Shr 8) And $F] := idx;
-            keyStage := 2;
+            If Press_Fx0A Then Begin
+              If (LastFx0A <> idx) Or (iFrameCount - Fx0ATime > Fx0ADelay) Then Begin
+                sTimer := 4;
+                If LastFx0A = idx then Begin
+                  Fx0ATime := iFrameCount;
+                  Fx0aDelay := Ceil((REPPER/50)*FPS);
+                End;
+                LastFx0A := idx;
+                keyStage := 3;
+                Inc(PC, 2);
+              End;
+            End Else
+              keyStage := 2;
             Break;
           End;
       End;
     2:
       If Not KeyStates[Regs[(ci Shr 8) And $F]] Then Begin
-        KeyStage := 0;
+        KeyStage := 3;
         Inc(PC, 2);
-        Cycles := 8;
+      End Else
+        sTimer := 4;
+    3:
+      If sTimer > 0 Then
+        Frame(Cycles)
+      Else Begin
+        KeyStage := 0;
+        Cycles := 10;
       End;
   End;
 End;

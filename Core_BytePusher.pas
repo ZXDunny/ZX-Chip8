@@ -16,7 +16,6 @@ Type
     Procedure InstructionLoop; Override;
   End;
 
-
 implementation
 
 Uses Windows, SysUtils, Math, SyncObjs, Chip8Int, Display, Sound;
@@ -59,7 +58,8 @@ Begin
   For r := 216 To 255 Do
     bpPalette[r] := 0;
 
-  MakeSoundBuffers(60);
+  FPS := 60;
+  MakeSoundBuffers(FPS, Audio);
   SetDisplay(256, 256, 32);
 
 End;
@@ -72,7 +72,6 @@ Var
 Begin
 
   if FileExists(Filename) Then Begin
-    ROMName := Filename;
     f := TFileStream.Create(Filename, fmOpenRead or fmShareDenyNone);
     SetLength(bin, f.Size);
     f.Read(bin[0], f.Size);
@@ -89,29 +88,33 @@ End;
 
 Procedure TBytePusherCore.DoSoundTimer;
 Var
-  frameSamples, i, j, MemOfs: Integer;
-  Sample, Sample1, Sample2: SmallInt;
+  frameSamples, i, j, MemOfs, Addr: Integer;
+  nSample, Sample1, Sample2: SmallInt;
   t, iSam: Double;
   b: Byte;
 Const
   SampleCount = 256;
 Begin
-  frameSamples := BuffSize Div 4;
-  t := SampleCount / frameSamples;
-  MemOfs := (Memory[6] Shl 16) + (Memory[7] Shl 8);
-  j := 0;
-  For i := 0 To FrameSamples - 1 Do Begin
-    iSam := (i * t);
-    b := Memory[MemOfs + Floor(iSam)];
-    Sample1 := b or (b Shl 8);
-    b := Memory[MemOfs + Floor(iSam) +1];
-    Sample2 := b or (b Shl 8);
-    Sample := Round(Sample1 + (Sample2 - Sample1) * Frac(iSam));
-    pSmallInt(@FrameBuffer[j])^ := Sample;
-    pSmallInt(@FrameBuffer[j + 2])^ := Sample;
-    Inc(j, 4);
+  With Audio^ Do Begin
+    frameSamples := BuffSize Div 4;
+    t := SampleCount / frameSamples;
+    MemOfs := (Memory[6] Shl 16) + (Memory[7] Shl 8);
+    j := 0;
+    For i := 0 To FrameSamples - 1 Do Begin
+      iSam := (i * t);
+      Addr := MemOfs + Floor(iSam);
+      b := Memory[Addr];
+      Sample1 := b or (b Shl 8);
+      If iSam < SampleCount -1 then
+        b := Memory[Addr +1];
+      Sample2 := b or (b Shl 8);
+      nSample := Round(Sample1 + (Sample2 - Sample1) * Frac(iSam));
+      pSmallInt(@FrameBuffer[j])^ := nSample;
+      pSmallInt(@FrameBuffer[j + 2])^ := nSample;
+      Inc(j, 4);
+    End;
+    InjectSound(Audio, Not FullSpeed);
   End;
-  InjectSound(@FrameBuffer[0], Not FullSpeed);
 End;
 
 Procedure TBytePusherCore.InstructionLoop;
@@ -130,12 +133,14 @@ Begin
     PC := @Memory[(PC[6] shl 16) or (PC[7] shl 8) or PC[8]];
     Inc(iCnt);
 
-  Until iCnt = 65536;
+  Until FrameDone(iCnt = 65536);
 
   // End of Frame. Create the display and send sound
 
   Present;
+  emuFrameLength := GetTicks - emuLastTicks;
   DoSoundTimer;
+  Inc(iFrameCount);
 
   // Set the keyboard state
 
@@ -147,6 +152,7 @@ Begin
 
   // Metrics
 
+  GetTimings;
   ipf := iCnt;
   iCnt := 0;
 

@@ -51,5 +51,12 @@
     <Transaction>2024/11/23 15:01:45.000.914,=D:\Projects\Chip8\Unit1.pas</Transaction>
     <Transaction>2024/11/23 15:17:57.000.520,D:\Projects\Chip8\Unit1.pas=D:\Projects\Chip8\CustomCoreDlg.pas</Transaction>
     <Transaction>2024/11/23 15:17:57.000.520,D:\Projects\Chip8\Unit1.dfm=D:\Projects\Chip8\CustomCoreDlg.dfm</Transaction>
+    <Transaction>2024/12/07 19:41:13.000.831,=D:\Projects\Chip8\Unit1.pas</Transaction>
+    <Transaction>2024/12/07 19:41:27.000.420,D:\Projects\Chip8\TextureMap.pas=D:\Projects\Chip8\Unit1.pas</Transaction>
+    <Transaction>2024/12/13 15:33:38.000.102,=D:\Projects\Chip8\Unit1.pas</Transaction>
+    <Transaction>2024/12/13 15:33:59.000.762,D:\Projects\Chip8\Fonts.pas=D:\Projects\Chip8\Unit1.pas</Transaction>
+    <Transaction>2024/12/13 23:25:12.000.384,=D:\Projects\Chip8\Unit1.pas</Transaction>
+    <Transaction>2024/12/13 23:25:56.000.742,D:\Projects\Chip8\DBEditor.pas=D:\Projects\Chip8\Unit1.pas</Transaction>
+    <Transaction>2024/12/13 23:25:56.000.742,D:\Projects\Chip8\DBEditor.dfm=D:\Projects\Chip8\Unit1.dfm</Transaction>
   </Transactions>
 </BorlandProject>

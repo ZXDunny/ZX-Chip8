@@ -6,6 +6,12 @@ Uses SyncObjs, Core_Def, Core_sChipLegacy11;
 
 Type
 
+  TClr = packed record
+    case Integer of
+      0: (B, G, R, A: Byte);
+      1: (ARGB: LongWord);
+    End;
+
   TSampleBuffer = Record
     Data: Array of Byte;
     Rate, Length: Integer;
@@ -21,7 +27,7 @@ Type
     SprWidth, SprHeight, SprBlend: integer;
     Alpha, CollClr: Byte;
     CurBuffer: Integer;
-    Sample: TSampleBuffer;
+    iSample: TSampleBuffer;
     SamplePlaying: Boolean;
 
     Procedure InstructionLoop; Override;
@@ -31,7 +37,7 @@ Type
     Function  GetMem(Address: Integer): Byte; Override;
     Procedure WriteMem(Address: Integer; Value: Byte); Override;
     Function  AlphaBlend(rgb1, rgb2: LongWord; t: Byte): Longword; inline;
-    Function  Blend(rgb1, rgb2: LongWord): LongWord;
+    Function  Blend(rgb1, rgb2: TClr): TClr;
     Procedure DoSoundTimer; Override;
     Procedure BlendBuffers;
     Procedure Skip01nn;
@@ -42,68 +48,74 @@ Type
     Procedure Op00Cn; Override; Procedure Op00FB; Override; Procedure Op00FC; Override; Procedure OpFx0A; Override;
     Procedure OpFx1E; Override;
 
-    Procedure Op0010; Procedure Op0011; Procedure Op01nn; Procedure Op02nn; Procedure Op03nn;
-    Procedure Op04nn; Procedure Op05nn; Procedure Op060n; Procedure Op0700; Procedure Op080n; Procedure Op09nn;
-    Procedure Op00Bn;
+    Procedure Op0010; Procedure Op0011; Procedure Op01nn; Procedure Op02nn; Procedure Op03nn; Procedure Op04nn;
+    Procedure Op05nn; Procedure Op060n; Procedure Op0700; Procedure Op080n; Procedure Op09nn; Procedure Op00Bn;
   End;
 
-Var
-
-  LastInstruction: Integer;
+  Function IntColorMult(color1, color2: Byte): Byte; inline;
 
 implementation
 
 Uses SysUtils, Classes, Windows, Math, Chip8Int, Display, Sound;
 
+Const
+
+  Opacities: Array[0..5] of Byte = (255, 64, 128, 192, 255, 255);
+
 Function TMegaChipCore.AlphaBlend(rgb1, rgb2: LongWord; t: Byte): Longword;
 Var
   s: LongWord;
 Begin
+
   s := 255 - t;
-  Result := (((((rgb1 Shr 0) And $FF) * s + ((rgb2 Shr 0) And $FF) * t) Shr 8)) Or (((((rgb1 Shr 8) And $ff) * s + ((rgb2 Shr 8) And $ff) * t)) And Not $ff) Or
-            (((((rgb1 Shr 16) And $ff) * s + ((rgb2 Shr 16) And $ff) * t) Shl 8) And Not $ffff) Or (((((rgb1 Shr 24) And $ff) * s + ((rgb2 Shr 24) And $ff) * t) Shl 16) And Not $ffffff);
+  Result := ((((rgb1 And $FF) * s + (rgb2 And $FF) * t) Shr 8)) Or
+            (((((rgb1 Shr 8) And $ff) * s + ((rgb2 Shr 8) And $ff) * t)) And Not $ff) Or
+            (((((rgb1 Shr 16) And $ff) * s + ((rgb2 Shr 16) And $ff) * t) Shl 8) And Not $ffff) Or
+            (((((rgb1 Shr 24) And $ff) * s + ((rgb2 Shr 24) And $ff) * t) Shl 16) And Not $ffffff);
 End;
 
-Function TMegaChipCore.Blend(rgb1, rgb2: LongWord): LongWord;
+Function IntColorMult(color1, color2: Byte): Byte;
+Begin
+  Result := ((color1 * (color2 or color2 shl 8)) + $8080) shr 16;
+End;
+
+Function TMegaChipCore.Blend(rgb1, rgb2: TClr): TClr;
+Var
+  Am: Byte;
 Begin
 
-  // Blend
-  Case SprBlend of
-    0: // Normal
-      Begin
-        Result := rgb2;
-      End;
-    1: // 25%
-      Begin
-        Result := ((rgb2 and $FCFCFCFC) shr 2) * 1 + ((rgb1 and $FCFCFCFC) shr 2) * 3;
-      End;
-    2: // 50%
-      Begin
-        Result := ((rgb1 and $FEFEFEFE) shr 1) + ((rgb2 and $FEFEFEFE) shr 1);
-      End;
-    3: // 75%
-      Begin
-        Result := ((rgb1 and $FCFCFCFC) shr 2) * 1 + ((rgb2 and $FCFCFCFC) shr 2) * 3;
-      End;
-    4: // Additive
-      Begin
-        Result := (Min(((rgb1 shr 24) and $FF) + ((rgb2 shr 24) and $FF), 255) shl 24) or
-                  (Min(((rgb1 shr 16) and $FF) + ((rgb2 shr 16) and $FF), 255) shl 16) or
-                  (Min(((rgb1 shr  8) and $FF) + ((rgb2 shr  8) and $FF), 255) shl  8) or
-                   Min((rgb1 and $FF) + (rgb2 and $FF), 255);
-      End;
-    5: // Multiply
-      Begin
-        Result := (((((rgb1 shr 24) and $FF) * ((rgb2 shr 24) and $FF)) div 255) shl 24) or
-                  (((((rgb1 shr 16) and $FF) * ((rgb2 shr 16) and $FF)) div 255) shl 16) or
-                  (((((rgb1 shr  8) and $FF) * ((rgb2 shr  8) and $FF)) div 255) shl  8) or
-                  (((rgb1 and $FF) * (rgb2 and $FF)) div 255);
-      End;
-  Else
-    Begin
-      Result := rgb2;
+  rgb1.A := IntColorMult(rgb1.A, Opacities[SprBlend]);
+
+  If rgb1.A = 0 Then
+
+    Result := rgb2
+
+  Else Begin
+
+    Case SprBlend of
+      0..3: // Normal, varying opacity
+        Begin
+          Result.ARGB := rgb1.ARGB;
+        End;
+      4:
+        Begin // Additive
+          Result.ARGB := (Min(rgb1.R + rgb2.R, $FF) Shl 16) or (Min(rgb1.G + rgb2.G, $FF) Shl 8) or Min(rgb1.B + rgb2.B, $FF);
+        End;
+      5:
+        Begin // Multiply
+          Result.ARGB := (IntColorMult(rgb1.R, rgb2.R) Shl 16) or (IntColorMult(rgb1.G, rgb2.G) Shl 8) or IntColorMult(rgb1.B, rgb2.B);
+        End;
     End;
+
+    If rgb1.A < $FF Then Begin
+      Am := 255 - rgb1.A;
+      Result.ARGB := (($FF And IntColorMult(rgb2.R, Am) + IntColorMult(Result.R, rgb1.A)) Shl 16) or
+                     (($FF And IntColorMult(rgb2.G, Am) + IntColorMult(Result.G, rgb1.A)) Shl 8) or
+                      ($FF And IntColorMult(rgb2.B, Am) + IntColorMult(Result.B, rgb1.A));
+    End;
+
   End;
+
 End;
 
 Procedure TMegaChipCore.Skip01nn;
@@ -159,11 +171,13 @@ Begin
   FillMemory(@DisplayBuffers[1][0], 256 * 192 * 4, 0);
   FillMemory(@CollMap[0], 256 * 192, 0);
   FillMemory(@DisplayMem[0], Length(DisplayMem), 0);
-  MakeSoundBuffers(50);
+
+  FPS := 50;
+  MakeSoundBuffers(FPS, Audio);
   DisplayFlag := True;
 
-  MegaPalette[0]   := $00000000;
-  MegaPalette[255] := $00FFFFFF;
+  MegaPalette[0]   := $FF000000;
+  MegaPalette[255] := $FFFFFFFF;
   MegaPalette[254] := $FFE4DCD4;
 
   MegaChipMode := False;
@@ -203,9 +217,11 @@ Begin
     OpCodes[ci Shr 12];
     Inc(icnt);
 
-  Until iCnt >= maxipf;
+  Until FrameDone(iCnt >= maxipf);
 
   If Timer > 0 then Dec(Timer);
+  Inc(iFrameCount);
+  emuFrameLength := GetTicks - emuLastTicks;
 
   DoSoundTimer;
 
@@ -215,8 +231,11 @@ Begin
     DisplayFlag := False;
   End;
 
-  InjectSound(@FrameBuffer[0], Not FullSpeed);
+  InjectSound(Audio, Not FullSpeed);
 
+  // Metrics
+
+  GetTimings;
   If FullSpeed Then
     Inc(ipf, icnt)
   Else Begin
@@ -260,8 +279,8 @@ Begin
     End;
   End Else Begin
     CopyMemory(@PresentDisplay[0], @DisplayBuffers[CurBuffer][0], 256 * 192 * 4);
-    DisplayUpdate := True;
     CurBuffer := 1 - CurBuffer;
+    DisplayUpdate := True;
   End;
 
   DisplayLock.Leave;
@@ -306,48 +325,54 @@ Const
   CycleLength = 1024;
 
 Begin
-  // If Sound Timer > 0 then generate a tone.
-  If sTimer > 0 Then Begin
-    Dec(sTimer);
-    dcIn := LastS = 0;
-    dcOut := sTimer = 0;
-    sPos := 0;
-    stepSize := (BuzzerTone * CycleLength) / sHz;
-    While sPos < BuffSize Do Begin
-      t := sBuffPos * 6.283 / CycleLength;
-      oSample := Round(16384 * (sin(t) + sin(t * 3) / 3));
-      pWord(@FrameBuffer[sPos])^ := oSample;
-      pWord(@FrameBuffer[sPos + 2])^ := oSample;
-      sBuffPos := sBuffPos + stepSize;
-      if sBuffPos >= CycleLength then
-        sBuffPos := sBuffPos - CycleLength;
-      Inc(sPos, 4);
-    end;
-    DeClick(dcIn, dcOut);
-  End Else
-    For Idx := 0 To BuffSize -1 Do
-      FrameBuffer[Idx] := 0;
 
-  // If there's a sample playing, then mix it in now.
+  With Audio^ Do Begin
 
-  If SamplePlaying Then Begin
+    // If Sound Timer > 0 then generate a tone.
+    If sTimer > 0 Then Begin
+      Dec(sTimer);
+      dcIn := LastS = 0;
+      dcOut := sTimer = 0;
+      sPos := 0;
+      stepSize := (BuzzerTone * CycleLength) / sHz;
+      While sPos < BuffSize Do Begin
+        t := sBuffPos * 6.283 / CycleLength;
+        oSample := Round(16384 * (sin(t) + sin(t * 3) / 3));
+        pWord(@FrameBuffer[sPos])^ := oSample;
+        pWord(@FrameBuffer[sPos + 2])^ := oSample;
+        sBuffPos := sBuffPos + stepSize;
+        if sBuffPos >= CycleLength then
+          sBuffPos := sBuffPos - CycleLength;
+        Inc(sPos, 4);
+      end;
+      DeClick(dcIn, dcOut, Audio);
+      SoundFlag := 1;
+    End Else
+      For Idx := 0 To BuffSize -1 Do
+        FrameBuffer[Idx] := 0;
 
-    sPos := 0;
-    While sPos < BuffSize Do Begin
-      pSample := (Byte(Sample.Data[Trunc(Sample.Position)]) - 128) Shl 8;
-      pSample := pSample Or ((pSample Shr 8) And $FF);
-      pSmallInt(@FrameBuffer[sPos])^     := Mix(pSample, pSmallInt(@FrameBuffer[sPos])^);
-      pSmallInt(@FrameBuffer[sPos + 2])^ := Mix(pSample, pSmallInt(@FrameBuffer[sPos + 2])^);
-      Inc(sPos, 4);
-      Sample.Position := Sample.Position + Sample.Delta;
-      If Sample.Position > Sample.Length Then
-        If Sample.Loop Then
-          Sample.Position := Sample.Position - Sample.Length
-        Else Begin
-          SamplePlaying := False;
-          Break;
-        End;
+    // If there's a sample playing, then mix it in now.
+
+    If SamplePlaying Then Begin
+
+      sPos := 0;
+      While sPos < BuffSize Do Begin
+        pSample := (ShortInt(iSample.Data[Trunc(iSample.Position)]) - 128) * 256;
+        pSample := pSample Or ((pSample Shr 8) And $FF);
+        pSmallInt(@FrameBuffer[sPos])^     := Mix(pSample, pSmallInt(@FrameBuffer[sPos])^);
+        pSmallInt(@FrameBuffer[sPos + 2])^ := Mix(pSample, pSmallInt(@FrameBuffer[sPos + 2])^);
+        Inc(sPos, 4);
+        iSample.Position := iSample.Position + iSample.Delta;
+        If iSample.Position >= iSample.Length Then
+          If iSample.Loop Then
+            iSample.Position := iSample.Position - iSample.Length
+          Else Begin
+            SamplePlaying := False;
+            Break;
+          End;
+      End;
     End;
+
   End;
 
   LastS := sTimer;
@@ -492,31 +517,31 @@ End;
 
 Procedure TMegaChipCore.Op060n;
 Var
-  idx, l: Integer;
+  idx, l, clickStart: Integer;
   oSample, Scalar, ScaleInc: Double;
 Begin
   // 060n - Play sample at I. Loop if n = 0, else one-shot
   SamplePlaying := True;
-  Sample.Rate := (GetMem(i) Shl 8) + GetMem(i + 1);
-  Sample.Length := (GetMem(i + 2) Shl 16) + (GetMem(i + 3) Shl 8) + GetMem(i + 4);
-  SetLength(Sample.Data, Sample.Length);
-  For idx := 0 To Sample.Length -1 Do
-    Sample.Data[idx] := GetMem(i + 8 + idx);
-  Sample.Loop := (ci And $F) = 0;
-  Sample.Position := 0;
-  Sample.Delta := Sample.Rate / sHz;
+  iSample.Rate := (GetMem(i) Shl 8) + GetMem(i + 1);
+  iSample.Length := (GetMem(i + 2) Shl 16) + (GetMem(i + 3) Shl 8) + GetMem(i + 4);
+  SetLength(iSample.Data, iSample.Length);
+  For idx := 0 To iSample.Length -1 Do
+    iSample.Data[idx] := GetMem(i + 8 + idx);
+  iSample.Loop := (ci And $F) = 0;
+  iSample.Position := 0;
+  iSample.Delta := iSample.Rate / sHz;
   // De-Click the end of the buffer if it's not looped
-  If Not Sample.Loop Then Begin
-    l := Min(43, Sample.Length);
+  If Not iSample.Loop Then Begin
+    clickStart := iSample.Length -1;
+    l := Min(43, clickStart);
     Scalar := 0;
     ScaleInc := 1/l;
     For idx := 0 to l Do Begin
-      oSample := (pByte(@Sample.Data[Sample.Length - (idx + 1)])^ - 128) * Scalar;
-      pByte(@Sample.Data[Sample.Length - (idx + 1)])^ := Trunc(oSample + 128);
+      oSample := (pByte(@iSample.Data[clickStart - idx])^ - 128) * Scalar;
+      pByte(@iSample.Data[clickStart - idx])^ := Trunc(oSample + 128);
       Scalar := Scalar + ScaleInc;
     End;
   End;
-
 End;
 
 Procedure TMegaChipCore.Op0700;
@@ -676,7 +701,7 @@ Begin
               dOffs := cy * 256 + cx;
               vF := vF Or (CollMap[dOffs] = CollClr);
               CollMap[dOffs] := pIdx;
-              DisplayBuffers[CurBuffer][dOffs] := Blend(DisplayBuffers[CurBuffer][dOffs], MegaPalette[pIdx]);
+              DisplayBuffers[CurBuffer][dOffs] := Blend(TClr(MegaPalette[pIdx]), TClr(DisplayBuffers[CurBuffer][dOffs])).ARGB;
             End;
             Inc(idx);
           End;
@@ -688,17 +713,29 @@ Begin
 End;
 
 Procedure TMegaChipCore.OpEx9E;
+Var
+  Key: integer;
 Begin
   // Advance PC if key in x is down
-  t := 2 * Ord(KeyStates[Regs[(ci Shr 8) And $F] And $F]);
+  Key := Regs[(ci Shr 8) And $F] And $F;
+  If Press_Fx0A And (Key = LastFx0A) Then
+    t := 0
+  Else
+    t := 2 * Ord(KeyStates[Key]);
   If t > 0 Then Skip01nn;
   Inc(PC, t);
 End;
 
 Procedure TMegaChipCore.OpExA1;
+Var
+  Key: integer;
 Begin
   // Advance PC if key in x is up
-  t := 2 * Ord(Not KeyStates[Regs[(ci Shr 8) And $F] And $F]);
+  Key := Regs[(ci Shr 8) And $F] And $F;
+  If Press_Fx0A And (Key = LastFx0A) Then
+    t := 2
+  Else
+    t := 2 * Ord(Not KeyStates[Key]);
   If t > 0 Then Skip01nn;
   Inc(PC, t);
 End;

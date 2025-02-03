@@ -2,17 +2,12 @@ unit Core_Def;
 
 interface
 
-Uses Classes;
+Uses Classes, Sound;
 
 Type
 
   TOpcode = Procedure of Object;
   pOpcode = ^TOpcode;
-
-  TOpRec = Record
-    Idx: Integer;
-    Opcode: pOpcode;
-  End;
 
   TDisplayInfo = Record
     Data: Pointer;
@@ -27,14 +22,20 @@ Type
     KeyStates: Array[0..15] of Boolean;
 
     t, x, y, n: Byte;
-    ipf, maxipf: Integer;
     PC, StackPtr: LongWord;
-    ExitLoop, DoQuirks, DisplayWait, DxynWrap: Boolean;
-    ci, cil, Cycles, mCycles, LastFrameCount, Timer, sTimer, NextFrame, icnt, i, nnn, keyStage, LastS: Integer;
+    ipf, maxipf, LastFx0A, Fx0ATime, Fx0ADelay, REPDEL, REPPER, FPS: Integer;
+    ExitLoop, DoQuirks, DisplayWait, DxynWrap, FullSpeed, Press_fx0A: Boolean;
+    ci, cil, Cycles, mCycles, LastFrameCount, Timer, sTimer, NextFrame, icnt, i, nnn, keyStage, LastS, iFrameCount: Integer;
+
+    emuLastTicks, emuLastFrameTime, emuFrameLength: Double;
 
     DispWidth, DispHeight, DispDepth: Integer;
     DisplayMem, PresentDisplay: Array of Byte;
-    sBuffPos, BuzzerTone: Double;
+    sBuffPos, BuzzerTone, PeakRMS: Double;
+    Audio: pSoundObject;
+
+    Palette: Array[0..$FF] of LongWord;
+    BuzzerColor, SilenceColor, SoundFlag: LongWord;
 
     Procedure Frame(AddCycles: Integer); Virtual;
     Procedure SetDisplay(Width, Height, Depth: Integer); Virtual;
@@ -47,11 +48,15 @@ Type
     Procedure Present; Virtual;
     Function  GetMem(Address: Integer): Byte; Virtual;
     Procedure WriteMem(Address: Integer; Value: Byte); Virtual;
-    {$IFDEF DEBUG}
-    Procedure Log(Str: String);
-    {$ENDIF}
+    Function  GetSTimer: Integer; Virtual;
+    Function  GetBuzzerLevel: Double; Virtual;
+    Function  GetBuzzerColor: LongWord; Virtual;
+    Function  GetSilenceColor: LongWord; Virtual;
+    Procedure SetBuzzerColor(Clr: LongWord); Virtual;
+    Procedure SetSilenceColor(Clr: LongWord); Virtual;
+    Function  FrameDone(Condition: Boolean): Boolean;
+    Procedure GetTimings;
   End;
-
 
 Const
 
@@ -63,22 +68,49 @@ Const
 
   {$IFDEF DEBUG}
   LogFilename = 'c:\temp\c8log.txt';
+  Procedure Log(Str: String);
   {$ENDIF}
 
 implementation
 
-Uses SysUtils, SyncObjs, Display;
+Uses SysUtils, SyncObjs, Math, Display;
 
 Procedure TCore.Reset;
 Begin
+  STimer := 0;
+  iFrameCount := 0;
   DoQuirks := False;
   DxynWrap := False;
   DisplayWait := True;
+  Press_Fx0A := True;
+  LastFx0A := -1;
+  REPDEL := 20;
+  REPPER := 4;
+  emuLastTicks := GetTicks;
+  emuLastFrameTime := 0;
+  Fullspeed := False;
+End;
+
+Function TCore.FrameDone(Condition: Boolean): Boolean;
+Begin
+  If FullSpeed Then Begin
+    Result := GetTicks - emuLastTicks >= Audio^.FrameMS_D * 10
+  End Else
+    Result := Condition;
+End;
+
+Procedure TCore.GetTimings;
+Var
+  ticks: Double;
+Begin
+  Ticks := GetTicks;
+  emuLastFrameTime := ticks - emuLastTicks;
+  emuLastTicks := ticks;
 End;
 
 Procedure TCore.Frame(AddCycles: Integer);
 Begin
-
+  //
 End;
 
 Procedure TCore.LoadROM(Filename: String; DoReset: Boolean);
@@ -99,6 +131,42 @@ End;
 Procedure TCore.WriteMem(Address: Integer; Value: Byte);
 Begin
   //
+End;
+
+Function TCore.GetSTimer: Integer;
+Begin
+  Result := SoundFlag;
+  SoundFlag := 0;
+End;
+
+Function TCore.GetBuzzerLevel: Double;
+Begin
+  If SoundFlag > 0 Then Begin
+    Result := Audio.PeakRMS;
+    If Result < 1/32768 Then
+      Result := 0;
+  End Else
+    Result := 0;
+End;
+
+Function  TCore.GetBuzzerColor: LongWord;
+Begin
+  Result := BuzzerColor;
+End;
+
+Function  TCore.GetSilenceColor: LongWord;
+Begin
+  Result := SilenceColor;
+End;
+
+Procedure TCore.SetBuzzerColor(Clr: LongWord);
+Begin
+  BuzzerColor := Clr;
+End;
+
+Procedure TCore.SetSilenceColor(Clr: LongWord);
+Begin
+  SilenceColor := Clr;
 End;
 
 Procedure TCore.SetDisplay(Width, Height, Depth: Integer);
@@ -142,8 +210,12 @@ Var
 Begin
 
   For idx := 0 To 15 Do
-    If Key = Ord(KeyCodes[idx]) Then
+    If Key = Ord(KeyCodes[idx]) Then Begin
       KeyStates[idx] := True;
+      Fx0ATime := iFrameCount;
+      Fx0ADelay := Ceil((REPDEL/50)*FPS);
+      LastFx0A := -1;
+    End;
 
 End;
 
@@ -153,13 +225,16 @@ Var
 Begin
 
   For idx := 0 To 15 Do
-    If Key = Ord(KeyCodes[idx]) Then
+    If Key = Ord(KeyCodes[idx]) Then Begin
       KeyStates[idx] := False;
+      If idx = LastFx0A Then
+        LastFx0A := -1;
+    End;
 
 End;
 
 {$IFDEF DEBUG}
-Procedure TCore.Log(Str: String);
+Procedure Log(Str: String);
 var
   LogFile: TextFile;
 Begin

@@ -22,7 +22,7 @@ Type
 
 implementation
 
-Uses Windows, SysUtils, Classes, Math, Chip8Int, Display;
+Uses Windows, SysUtils, Classes, Math, Chip8Int, Display, Fonts;
 
 Procedure TSChipLegacy11Core.BuildTables;
 Var
@@ -44,12 +44,10 @@ Begin
 End;
 
 Procedure TSChipLegacy11Core.Reset;
-var
-  idx: Integer;
 Begin
 
   Inherited;
-  for idx := 0 to 99 Do Memory[idx + 160] := HiresFont11[idx];
+  LoadFont(Self, Font_Large_sChip11);
 
 End;
 

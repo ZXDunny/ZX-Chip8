@@ -1,6 +1,7 @@
 object MainForm: TMainForm
   Left = 0
   Top = 0
+  AlphaBlendValue = 0
   Caption = 'ZX-Chip8'
   ClientHeight = 208
   ClientWidth = 400
@@ -24,6 +25,15 @@ object MainForm: TMainForm
     208)
   PixelsPerInch = 96
   TextHeight = 13
+  object BuzzerShape: TShape
+    Left = 0
+    Top = 0
+    Width = 401
+    Height = 209
+    Anchors = [akLeft, akTop, akRight, akBottom]
+    Brush.Color = clMedGray
+    Pen.Style = psClear
+  end
   object DisplayPanel: TPanel
     Left = 8
     Top = 8
@@ -38,12 +48,6 @@ object MainForm: TMainForm
     ShowCaption = False
     TabOrder = 0
     OnResize = DisplayPanelResize
-  end
-  object DisplayTimer: TTimer
-    Interval = 1
-    OnTimer = DisplayTimerTimer
-    Left = 16
-    Top = 16
   end
   object OpenDialog: TOpenDialog
     Filter = 'All Files|*.*'

@@ -1,5 +1,16 @@
 ﻿unit mainform;
 
+// TO DO:
+//
+// Browser
+  // Database editor
+  // DB load/save
+//
+// optional keypress
+// Octo assembler
+// on-screen keyboard
+// debugger
+
 interface
 
 uses
@@ -7,10 +18,12 @@ uses
   Vcl.Controls, Vcl.Forms, Vcl.Dialogs, dglOpenGL, display, Vcl.ExtCtrls, Chip8Int, Math,
   Vcl.Menus, Core_Custom;
 
+Const
+  WM_RENDER = WM_USER +1;
+
 type
   TMainForm = class(TForm)
     DisplayPanel: TPanel;
-    DisplayTimer: TTimer;
     OpenDialog: TOpenDialog;
     MainMenu: TMainMenu;
     File1: TMenuItem;
@@ -22,12 +35,12 @@ type
     N2: TMenuItem;
     Chip8Model1: TMenuItem;
     Browser1: TMenuItem;
+    BuzzerShape: TShape;
     procedure FormCreate(Sender: TObject);
     procedure FormKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);
     procedure FormShow(Sender: TObject);
     procedure FormDestroy(Sender: TObject);
     procedure DisplayPanelResize(Sender: TObject);
-    procedure DisplayTimerTimer(Sender: TObject);
     procedure FormKeyUp(Sender: TObject; var Key: Word; Shift: TShiftState);
     procedure menuOpenClick(Sender: TObject);
     procedure menuExitClick(Sender: TObject);
@@ -36,17 +49,22 @@ type
     procedure Browser1Click(Sender: TObject);
   private
     { Private declarations }
-    MaxIPF: Integer;
+    MaxIPF, TimingCount: Integer;
     MRUList: TStringlist;
+    Timings, iTimings: Array[0..3] of Double;
     procedure FormMove(var Msg: TMessage); message WM_MOVING;
     procedure OnAppMessage(var Msg: TMsg; var Handled: Boolean);
     procedure CMDialogKey(var msg: TCMDialogKey);  message CM_DIALOGKEY;
     procedure WMDropFiles(var msg: TWMDropFiles); message WM_DROPFILES;
+    procedure WMRender(var msg: TMessage); message WM_RENDER;
   protected
     procedure CreateWnd; Override;
     procedure DestroyWnd; Override;
   public
     { Public declarations }
+    CurrentModel: Integer;
+    Interpreter: TChip8Interpreter;
+    LastSTimer, CurBuzzerColor: Integer;
     Function  GetModelName(Model: Integer): String;
     Procedure SetModel(Model: Integer; Quirks: pQuirkSettings);
     Procedure SetCustomModel(Quirks: TQuirkSettings);
@@ -56,24 +74,93 @@ type
     Procedure SaveMRUList;
     Procedure MakeMRUMenu;
     procedure MRUItemClick(Sender: TObject);
+    Procedure SetBackground(Clr: LongWord);
   end;
 
 var
   Main: TMainForm;
-  CurrentModel: Integer;
-  Interpreter: TChip8Interpreter;
-
-Const
-
-  MaxModels = 10;
-  ModelNames:     Array[0..MaxModels -1] of String = ('VIP', 'Hybrid VIP', 'Chip8x', 'Chip-48', 'SChip1.0', 'SChip1.1', 'SChip Modern', 'XO-Chip', 'MegaChip', 'BytePusher');
-  ModelLongNames: Array[0..MaxModels -1] of String = ('Cosmac VIP (Chip8)', 'Hybrid VIP', 'Chip8X', 'Chip-48', 'Legacy SChip 1.0', 'Legacy SChip 1.1', 'Modern SChip', 'XO-Chip', 'MegaChip', 'BytePusher');
 
 implementation
 
 {$R *.dfm}
 
-Uses SyncObjs, ShellAPI, Sound, Browser, CustomCoreDlg, Core_Def;
+Uses SyncObjs, ShellAPI, Sound, Browser, CustomCoreDlg, Core_Def, Chip8DB;
+
+Procedure TMainForm.WMRender(var msg: TMessage);
+Var
+  c, t: LongWord;
+  ips: Single;
+  bz: Double;
+  s: String;
+
+  Function Lerp(A, B: Byte; Amt: Double): Byte;
+  Begin
+    Result := Trunc(A + ((B - A) * Amt));
+  End;
+
+  Procedure MakeTimings;
+  Var
+    MaxTimings: Integer;
+  Begin
+    Inc(TimingCount);
+    MaxTimings := Interpreter.Core.FPS Div 8;
+    iTimings[0] := (iTimings[0] + LastFrameDuration);
+    iTimings[1] := (iTimings[1] + LastFrameTime);
+    iTimings[2] := (iTimings[2] + Interpreter.Core.emuFrameLength);
+    iTimings[3] := (iTimings[3] + Interpreter.Core.emuLastFrameTime);
+
+    If TimingCount >= MaxTimings Then Begin
+      Timings[0] := iTimings[0] / TimingCount;
+      Timings[1] := iTimings[1] / TimingCount;
+      Timings[2] := iTimings[2] / TimingCount;
+      Timings[3] := iTimings[3] / TimingCount;
+      iTimings[0] := 0;
+      iTimings[1] := 0;
+      iTimings[2] := 0;
+      iTimings[3] := 0;
+      Dec(TimingCount, MaxTimings);
+    End;
+
+  End;
+
+begin
+
+  DisplayLock.Enter;
+
+    bz := Interpreter.Core.GetBuzzerLevel;
+    c := Interpreter.Core.GetBuzzerColor;
+    If Not FullScreen Then
+      t := Interpreter.Core.GetSilenceColor
+    Else
+      t := 0;
+    CurBuzzerColor := (Lerp((t Shr 16) and $FF, (c Shr 16) And $FF, bz) Shl 16) or (Lerp((t Shr 8) and $FF, (c Shr 8) And $FF, bz) Shl 8) or Lerp(t and $FF, c And $FF, bz);
+    SetBackground(CurBuzzerColor);
+    DisplayUpdate := DisplayUpdate Or (bz > 0);
+
+    If DisplayUpdate Then Begin
+      Interpreter.Render;
+      FrameLoop;
+    End;
+
+  DisplayLock.Leave;
+
+  MaxIPF := Round((Interpreter.iPerFrame + 0.5 + MaxIPF) / 2);
+  ips := (MaxIPF * 60) / 1e6;
+  s := '';
+  if Interpreter.ROMName <> '' Then
+    s := ExtractFileName(Interpreter.ROMName) + ' - '
+  Else
+    s := 'Idle - ';
+  s := s + Format('%.0n', [MaxIPF + 0.0]) + ' ipf';
+  If ips > 0.1 Then
+    s := s+ ' (' + Format('%.1f', [ips]) + 'M ips)';
+
+  MakeTimings;
+  Caption := '[' + GetModelName(CurrentModel) + '] ' + s + Format(' (Frame time: %5.2f, Time since: %5.2f, emuTime: %5.2f, emuSince: %5.2f)', [Timings[0], Timings[1], Timings[2], Timings[3]]);
+
+  BuzzerShape.Brush.Color := CurBuzzerColor;
+
+end;
 
 Procedure TMainForm.CreateWnd;
 Begin
@@ -104,7 +191,10 @@ Begin
 
   // Ensures the animation will display correctly during window move operations
 
-  If Assigned(Interpreter) Then DisplayTimerTimer(nil);
+  If Assigned(Interpreter) Then Begin
+    DisplayUpdate := True;
+    WMRender(Msg);
+  End;
 
 End;
 
@@ -145,6 +235,8 @@ procedure TMainForm.menuResetClick(Sender: TObject);
 begin
 
   Interpreter.Reset;
+  If Interpreter.ROMName <> '' Then
+    Interpreter.LoadROM(Interpreter.ROMName);
 
 end;
 
@@ -169,6 +261,7 @@ Var
   RenderInfo: TDisplayInfo;
 Begin
 
+  LastSTimer := 0;
   Interpreter.Pause;
   CurrentModel := Model;
   If CurrentModel = -1 Then Begin
@@ -185,6 +278,8 @@ Begin
   If Interpreter.ROMName <> '' Then
     Interpreter.LoadROM(Interpreter.ROMName);
 
+  Interpreter.SetBuzzerColor(ColorToRGB(clRed));
+  Interpreter.SetSilenceColor(ColorToRGB(clMedGray));
   Interpreter.Restart;
 
 End;
@@ -227,6 +322,7 @@ begin
       DisplayPanel.SetBounds(rect.Left, rect.Top, rect.Right - rect.Left, rect.Bottom - rect.Top);
       DisplayPanel.Anchors := [akLeft, akTop, akRight, akBottom];
     End;
+    DisplayUpdate := True;
     Interpreter.Restart;
     Exit;
   End;
@@ -246,16 +342,25 @@ procedure TMainForm.FormShow(Sender: TObject);
 begin
 
   Interpreter := TChip8Interpreter.Create(False);
+  Interpreter.DemoMode := False;
   Interpreter.SetCore(CurrentModel, nil);
+  Interpreter.SetBuzzerColor(ColorToRGB(clRed));
+  Interpreter.SetSilenceColor(ColorToRGB(clMedGray));
+  Interpreter.Restart;
+
+  InitDB(ExtractFileDir(ParamStr(0)) + '\ROMDB.c8db');
 
 end;
 
 procedure TMainForm.DisplayPanelResize(Sender: TObject);
+var
+  Msg: TMessage;
 begin
 
   If DisplayReady Then Begin
     ResizeDisplay;
     DisplayUpdate := True;
+    WMRender(msg);
   End;
 
 end;
@@ -270,43 +375,18 @@ Begin
 
 End;
 
+Procedure TMainForm.SetBackground(Clr: LongWord);
+Begin
 
-procedure TMainForm.DisplayTimerTimer(Sender: TObject);
-Var
-  ips: Single;
-  s: String;
-begin
+  BackRed := (Clr And $FF) / 255;
+  BackGreen := ((Clr And $FF00) Shr 8) / 255;
+  BackBlue := ((Clr And $FF0000) Shr 16)/ 255;
 
-  DisplayLock.Enter;
-
-  If DisplayUpdate Then Begin
-    Interpreter.Render;
-    FrameLoop(False);
-  End Else
-    If FUllSpeed Then
-      FrameLoop(False);
-
-  DisplayLock.Leave;
-
-  MaxIPF := Round((Interpreter.iPerFrame + 0.5 + MaxIPF) / 2);
-  ips := (MaxIPF * 60) / 1e6;
-  s := '';
-  if Interpreter.ROMName <> '' Then
-    s := ExtractFileName(Interpreter.ROMName) + ' - '
-  Else
-    s := 'Idle - ';
-  s := s + Format('%.0n', [MaxIPF + 0.0]) + ' ipf';
-  If ips > 0.1 Then
-    s := s+ ' (' + Format('%.1f', [ips]) + 'M ips)';
-
-  Caption := '[' + GetModelName(CurrentModel) + '] ' + s;
-
-end;
+End;
 
 procedure TMainForm.menuExitClick(Sender: TObject);
 begin
 
-  Interpreter.Terminate;
   Close;
 
 end;
@@ -319,7 +399,7 @@ begin
 
   CurrentModel := Chip8_VIP;
   InitDisplay(60, 64, 32, True, DisplayPanel);
-  InitSound(44100);
+  InitSound(48000);
 
   Application.OnMessage := OnAppMessage;
 
@@ -337,7 +417,6 @@ begin
   mi.Caption := '-';
   Chip8Model1.Add(mi);
 
-
   mi := TMenuItem.Create(Chip8Model1);
   mi.Caption := 'Custom...';
   mi.Tag := -1;
@@ -348,12 +427,15 @@ begin
 
   LoadMRUList;
 
+  DoubleBuffered := True;
+
 end;
 
 procedure TMainForm.FormDestroy(Sender: TObject);
 begin
 
   SaveMRUList;
+  MRUList.Free;
   Interpreter.Close;
   CloseGL;
   CloseSound;

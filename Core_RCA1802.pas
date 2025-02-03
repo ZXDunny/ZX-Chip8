@@ -20,7 +20,6 @@ Type
     State, KeyVal, D, DF, N, P: Byte;
     PC, RX: pWord;
     EF: Array[1..4] of Byte;
-    Constructor Create;
     Procedure Reset; Override;
     Procedure Present; Override;
     Procedure SampleQ(Cycles: Integer);
@@ -84,13 +83,6 @@ implementation
 
 Uses Windows, SysUtils, SyncObjs, Math, Display, Sound, Chip8Int;
 
-Constructor TRCA1802Core.Create;
-Begin
-
-  Inherited;
-
-ENd;
-
 Procedure TRCA1802Core.Present;
 Var
   Idx, j, b, bt, Addr: Integer;
@@ -125,6 +117,8 @@ End;
 Procedure TRCA1802Core.Reset;
 Begin
 
+  Inherited;
+
   I := 0;
   N := 0;
   P := 0;
@@ -143,7 +137,8 @@ Begin
   FillMemory(@DMABytes[0], 1024, 0);
   FillMemory(@Memory[0], $FFFF, 0);
 
-  MakeSoundBuffers(60);
+  FPS := 60;
+  MakeSoundBuffers(FPS, Audio);
   SetDisplay(256, 128, 32);
   DisplayEnabled := False;
   BuzzerTone := 1400;
@@ -175,7 +170,6 @@ Var
 Begin
 
   if FileExists(Filename) Then Begin
-    ROMName := Filename;
     f := TFileStream.Create(Filename, fmOpenRead or fmShareDenyNone);
     SetLength(bin, f.Size);
     f.Read(bin[0], f.Size);
@@ -183,7 +177,7 @@ Begin
 
     If DoReset Then Reset;
 
-    for idx := 0 to Min(High(bin), High(Memory)) do
+    for idx := 0 to Min(High(bin), High(Memory) - $200) do
       Memory[idx + $200] := bin[idx];
 
   End;
@@ -199,21 +193,27 @@ Const
   CycleLength = 1024;
 Begin
 
-  Inc(sAcc, Cycles);
-  SampleFreq := Round(3668 / (BuffSize Div 4));
-  stepSize := (BuzzerTone * CycleLength) / sHz;
-  While sAcc >= SampleFreq Do Begin
-    t := sBuffPos * 6.283 / CycleLength;
-    oSample := Ord(Q) * Round(16384 * (Sin(t) + Sin(t * 3) / 3));
-    pWord(@FrameBuffer[sPos])^ := oSample;
-    pWord(@FrameBuffer[sPos + 2])^ := oSample;
-    sBuffPos := FMod(sBuffPos + stepSize, CycleLength);
-    Inc(sPos, 4);
-    If sPos >= BuffSize Then Begin
-      InjectSound(@FrameBuffer[0], Not FullSpeed);
-      Dec(sPos, BuffSize);
+  emuFrameLength := GetTicks - emuLastTicks;
+
+  With Audio^ Do Begin
+
+    Inc(sAcc, Cycles);
+    SampleFreq := Round(3668 / (BuffSize Div 4));
+    stepSize := (BuzzerTone * CycleLength) / sHz;
+    While sAcc >= SampleFreq Do Begin
+      t := sBuffPos * 6.283 / CycleLength;
+      oSample := Ord(Q) * Round(16384 * (Sin(t) + Sin(t * 3) / 3));
+      pWord(@FrameBuffer[sPos])^ := oSample;
+      pWord(@FrameBuffer[sPos + 2])^ := oSample;
+      sBuffPos := FMod(sBuffPos + stepSize, CycleLength);
+      Inc(sPos, 4);
+      If sPos >= BuffSize Then Begin
+        InjectSound(Audio, Not FullSpeed);
+        Dec(sPos, BuffSize);
+      End;
+      Dec(sAcc, SampleFreq);
     End;
-    Dec(sAcc, SampleFreq);
+
   End;
 
 End;
@@ -278,11 +278,15 @@ Begin
 
     SampleQ(Cycles - prC);
 
-  Until Cycles >= 3668;
+  Until FrameDone(Cycles >= 3668);
 
   // End of Frame. Create the display
 
   Present;
+
+  // Metrics
+
+  GetTimings;
   ipf := iCnt;
   iCnt := 0;
 

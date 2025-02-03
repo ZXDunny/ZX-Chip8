@@ -19,6 +19,10 @@ Const
   Chip8_BytePusher     =  9;
   Chip8_Custom         = 10;
 
+  MaxModels            = 10;
+  ModelNames:         Array[0..MaxModels -1] of String = ('VIP', 'Hybrid VIP', 'Chip8x', 'Chip-48', 'SChip1.0', 'SChip1.1', 'SChip Modern', 'XO-Chip', 'MegaChip', 'BytePusher');
+  ModelLongNames:     Array[0..MaxModels -1] of String = ('Cosmac VIP (Chip8)', 'Hybrid VIP', 'Chip8X', 'Chip-48', 'Legacy SChip 1.0', 'Legacy SChip 1.1', 'Modern SChip', 'XO-Chip', 'MegaChip', 'BytePusher');
+
   IntMsg_Pause         =  0;
   IntMsg_Resume        =  1;
   IntMsg_SwitchCore    =  2;
@@ -27,6 +31,10 @@ Const
   IntMsg_Reset         =  5;
   IntMsg_KeyDown       =  6;
   IntMsg_KeyUp         =  7;
+  IntMsg_Palette       =  8;
+  IntMsg_BuzzerColor   =  9;
+  IntMsg_SilenceColor  = 10;
+  IntMsg_LoadFont      = 11;
 
 Type
 
@@ -46,10 +54,17 @@ Type
     MsgQueue: Array[0..1024] of TMsgRec;
     MsgPtr: Integer;
     MsgLock: TCriticalSection;
-    Paused, Finished: Boolean;
+    Paused, Finished, DemoMode: Boolean;
     intQuirks: TQuirkSettings;
+    SoundObject: TSoundObject;
+    intPalette: Array[0..255] of LongWord;
     Constructor Create(CreateSuspended: Boolean = False);
+    Destructor Destroy; Override;
     Procedure SetCore(NewCoreType: TChip8CoreType; Quirks: pQuirkSettings);
+    Procedure SetPalette(Colours: Array of LongWord);
+    Procedure SetBuzzerColor(Color: LongWord);
+    Procedure SetSilenceColor(Color: LongWord);
+    Procedure LoadFont(FontID: Integer);
     Procedure Execute; Override;
     Procedure Reset;
     Procedure LoadROM(Filename: String);
@@ -68,44 +83,19 @@ Type
 
 Var
   DisplayFlag: Boolean;
-  FullSpeed: Boolean;
-  ROMName: String;
 
 Const
 
-  Font: Array [0..79] of Byte =       ($F0, $90, $90, $90, $F0, $20, $60, $20, $20, $70, $F0, $10, $F0, $80, $F0, $F0, $10, $F0, $10, $F0,
-                                       $90, $90, $F0, $10, $10, $F0, $80, $F0, $10, $F0, $F0, $80, $F0, $90, $F0, $F0, $10, $20, $40, $40,
-                                       $F0, $90, $F0, $90, $F0, $F0, $90, $F0, $10, $F0, $F0, $90, $F0, $90, $90, $E0, $90, $E0, $90, $E0,
-                                       $F0, $80, $80, $80, $F0, $E0, $90, $90, $90, $E0, $F0, $80, $F0, $80, $F0, $F0, $80, $F0, $80, $80);
+  DefPalette: Array[0..15] of LongWord = ($0C1218, $E4DCD4, $8C8884, $403C38, $D82010, $40D020, $1040D0, $E0C818,
+                                          $501010, $105010, $50B0C0, $F08010, $E06090, $E0F090, $B050F0, $704020);
 
-  HiresFont10: Array[0..99] of Byte = ($3C, $7E, $C3, $C3, $C3, $C3, $C3, $C3, $7E, $3C, $18, $38, $58, $18, $18, $18, $18, $18, $18, $3C,
-                                       $3E, $7F, $C3, $06, $0C, $18, $30, $60, $FF, $FF, $3C, $7E, $C3, $03, $0E, $0E, $03, $C3, $7E, $3C,
-                                       $06, $0E, $1E, $36, $66, $C6, $FF, $FF, $06, $06, $FF, $FF, $C0, $C0, $FC, $FE, $03, $C3, $7E, $3C,
-                                       $3E, $7C, $C0, $C0, $FC, $FE, $C3, $C3, $7E, $3C, $FF, $FF, $03, $06, $0C, $18, $30, $60, $60, $60,
-                                       $3C, $7E, $C3, $C3, $7E, $7E, $C3, $C3, $7E, $3C, $3C, $7E, $C3, $C3, $7F, $3F, $03, $03, $3E, $7C);
-
-  HiresFont11: Array[0..99] of Byte = ($3C, $7E, $E7, $C3, $C3, $C3, $C3, $E7, $7E, $3C, $18, $38, $58, $18, $18, $18, $18, $18, $18, $3C,
-                                       $3E, $7F, $C3, $06, $0C, $18, $30, $60, $FF, $FF, $3C, $7E, $C3, $03, $0E, $0E, $03, $C3, $7E, $3C,
-                                       $06, $0E, $1E, $36, $66, $C6, $FF, $FF, $06, $06, $FF, $FF, $C0, $C0, $FC, $FE, $03, $C3, $7E, $3C,
-                                       $3E, $7C, $C0, $C0, $FC, $FE, $C3, $C3, $7E, $3C, $FF, $FF, $03, $06, $0C, $18, $30, $60, $60, $60,
-                                       $3C, $7E, $C3, $C3, $7E, $7E, $C3, $C3, $7E, $3C, $3C, $7E, $C3, $C3, $7F, $3F, $03, $03, $3E, $7C);
-
-  xoChipFont: Array[0..159] of Byte = ($7C, $C6, $CE, $DE, $D6, $F6, $E6, $C6, $7C, $00, $10, $30, $F0, $30, $30, $30, $30, $30, $FC, $00,
-                                       $78, $CC, $CC, $0C, $18, $30, $60, $CC, $FC, $00, $78, $CC, $0C, $0C, $38, $0C, $0C, $CC, $78, $00,
-                                       $0C, $1C, $3C, $6C, $CC, $FE, $0C, $0C, $1E, $00, $FC, $C0, $C0, $C0, $F8, $0C, $0C, $CC, $78, $00,
-                                       $38, $60, $C0, $C0, $F8, $CC, $CC, $CC, $78, $00, $FE, $C6, $C6, $06, $0C, $18, $30, $30, $30, $00,
-                                       $78, $CC, $CC, $EC, $78, $DC, $CC, $CC, $78, $00, $7C, $C6, $C6, $C6, $7C, $18, $18, $30, $70, $00,
-                                       $30, $78, $CC, $CC, $CC, $FC, $CC, $CC, $CC, $00, $FC, $66, $66, $66, $7C, $66, $66, $66, $FC, $00,
-                                       $3C, $66, $C6, $C0, $C0, $C0, $C6, $66, $3C, $00, $F8, $6C, $66, $66, $66, $66, $66, $6C, $F8, $00,
-                                       $FE, $62, $60, $64, $7C, $64, $60, $62, $FE, $00, $FE, $66, $62, $64, $7C, $64, $60, $60, $F0, $00);
-
-  Palette: Array[0..15] of LongWord = ($0C1218, $E4DCD4, $8C8884, $403C38, $D82010, $40D020, $1040D0, $E0C818,
-                                       $501010, $105010, $50B0C0, $F08010, $E06090, $E0F090, $B050F0, $704020);
-
+  BootROM: Array[0..50] of Byte =     ($00, $e0, $a2, $1a, $64, $05, $61, $01, $62, $12, $63, $0c, $d2, $35, $72, $05, $f4, $1e, $71, $01,
+                                       $31, $06, $12, $0c, $12, $18, $e0, $90, $e0, $90, $90, $f0, $80, $f0, $80, $f0, $f0, $90, $f0, $90,
+                                       $90, $e0, $90, $90, $90, $e0, $90, $90, $60, $20, $20);
 
 implementation
 
-Uses Display, Core_Chip8, Core_RCA1802, Core_Chip8x, Core_Chip48, Core_sChipLegacy10, Core_sChipLegacy11, Core_sChipModern, Core_xoChip, Core_MegaChip, Core_BytePusher;
+Uses Display, Fonts, Chip8DB, Core_Chip8, Core_RCA1802, Core_Chip8x, Core_Chip48, Core_sChipLegacy10, Core_sChipLegacy11, Core_sChipModern, Core_xoChip, Core_MegaChip, Core_BytePusher;
 
 // Message queue handling
 
@@ -153,13 +143,15 @@ Begin
     Case ID of
       IntMsg_Pause:
         Begin
-          PauseSound;
+          If Assigned(Core) And Core.Audio^.Enabled Then
+            PauseSound(Core.Audio);
           Paused := True;
         End;
       IntMsg_Resume:
         Begin
           Paused := False;
-          ResumeSound;
+          If Assigned(Core) And Core.Audio^.Enabled Then
+            ResumeSound(Core.Audio);
         End;
       IntMsg_SwitchCore:
         Begin
@@ -194,11 +186,17 @@ Begin
           End;
           If ((OldCoreType = Chip8_BytePusher) or (PayLoadI = Chip8_BytePusher)) And (OldCoreType <> PayLoadI) Then
             ROMName := '';
+          Core.Audio := @SoundObject;
+          For i := 0 To High(DefPalette) Do
+            Core.Palette[i] := DefPalette[i];
+          SoundObject.Enabled := Not DemoMode;
           Core.Reset;
           CoreType := PayLoadI;
         End;
       IntMsg_Close:
         Begin
+          If Core.Audio.Enabled Then
+            StopSound(Core.Audio);
           Terminate;
         End;
       IntMsg_LoadROM:
@@ -217,6 +215,23 @@ Begin
         Begin
           Core.KeyUp(PayLoadI);
         End;
+      IntMsg_Palette:
+        Begin
+          For i := 0 To PayLoadI Do
+            Core.Palette[i] := intPalette[i];
+        End;
+      IntMsg_BuzzerColor:
+        Begin
+          Core.SetBuzzerColor(LongWord(PayLoadI));
+        End;
+      IntMsg_SilenceColor:
+        Begin
+          Core.SetSilenceColor(LongWord(PayLoadI));
+        End;
+      IntMsg_LoadFont:
+        Begin
+          Fonts.LoadFont(Core, PayLoadI);
+        End;
     End;
 
   End;
@@ -230,23 +245,56 @@ Begin
   Core := nil;
   MsgPtr := -1;
   MsgLock := TCriticalSection.Create;
-  FullSpeed := False;
+  Paused := True;
   Inherited;
+End;
+
+Destructor TChip8Interpreter.Destroy;
+Begin
+
+  Inherited;
+
 End;
 
 Procedure TChip8Interpreter.SetCore(NewCoreType: TChip8CoreType; Quirks: pQuirkSettings);
 Begin
 
   CoreType := Chip8_None;
-  If Assigned(Quirks) Then CopyMemory(@intQuirks.CPUType, @Quirks^.CPUType, SizeOf(TQuirkSettings));
+  If Assigned(Quirks) Then
+    CopyMemory(@intQuirks.CPUType, @Quirks^.CPUType, SizeOf(TQuirkSettings))
+  Else
+    SetDefaultQuirks(NewCoreType, intQuirks);
   QueueAction(IntMsg_SwitchCore, NewCoreType);
   While CoreType <> NewCoreType Do Sleep(1);
 
 End;
 
+Procedure TChip8Interpreter.SetPalette(Colours: Array of LongWord);
+Var
+  i: Integer;
+Begin
+
+  For i := 0 To High(Colours) Do
+    intPalette[i] := Colours[i];
+
+  QueueAction(IntMsg_Palette, High(Colours));
+
+End;
+
+Procedure TChip8Interpreter.SetBuzzerColor(Color: LongWord);
+Begin
+  QueueAction(IntMsg_BuzzerColor, Integer(Color));
+End;
+
+Procedure TChip8Interpreter.SetSilenceColor(Color: LongWord);
+Begin
+  QueueAction(IntMsg_SilenceColor, Integer(Color));
+End;
+
 Procedure TChip8Interpreter.Pause;
 Begin
 
+  DisplayUpdate := False;
   QueueAction(IntMsg_Pause);
   While Not Paused Do Sleep(1);
 
@@ -255,6 +303,7 @@ End;
 Procedure TChip8Interpreter.Restart;
 Begin
 
+  DisplayUpdate := False;
   QueueAction(IntMsg_Resume);
   While Paused Do Sleep(1);
 
@@ -271,8 +320,9 @@ Procedure TChip8Interpreter.Execute;
 Begin
 
   NameThreadForDebugging('Interpreter');
-  Priority := tpHigher;
   Finished := False;
+  FreeOnTerminate := True;
+  Priority := tpNormal;
 
   Repeat
 
@@ -285,6 +335,9 @@ Begin
 
   Until Terminated;
 
+  If Assigned(Core) Then Core.Free;
+
+  MsgLock.Free;
   Finished := True;
 
 End;
@@ -311,14 +364,23 @@ End;
 Procedure TChip8Interpreter.KeyDown(Key: Integer);
 Begin
 
-  QueueAction(IntMsg_KeyDown, Key);
+  If not DemoMode Then
+    QueueAction(IntMsg_KeyDown, Key);
 
 End;
 
 Procedure TChip8Interpreter.KeyUp(Key: Integer);
 Begin
 
-  QueueAction(IntMsg_KeyUp, Key);
+  If Not DemoMode Then
+    QueueAction(IntMsg_KeyUp, Key);
+
+End;
+
+Procedure TChip8Interpreter.LoadFont(FontID: Integer);
+Begin
+
+  QueueAction(IntMsg_LoadFont, FontID);
 
 End;
 
@@ -332,14 +394,14 @@ Begin
   RenderInfo := Core.GetDisplayInfo;
 
   iPerFrame := Core.ipf;
-  If FullSpeed Then Core.ipf := 0;
+  If Core.FullSpeed Then Core.ipf := 0;
 
   Case RenderInfo.Depth of
     8: // Chip8, Chip48, sChip and XO-Chip
       Begin
         Src := RenderInfo.Data;
         For Idx := 0 To Length(DisplayArray) -1 Do Begin
-          DisplayArray[Idx] := Palette[Src^ And $F];
+          DisplayArray[Idx] := Core.Palette[Src^ And $F];
           Inc(Src);
         End;
       End;

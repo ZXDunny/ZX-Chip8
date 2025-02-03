@@ -15,6 +15,7 @@ Type
 
     Procedure BuildTables; Override;
     Procedure Reset; Override;
+    Procedure Frame(AddCycles: Integer); Override;
     Procedure InstructionLoop; Override;
     Function  GetMem(Address: Integer): Byte; Override;
     Procedure WriteMem(Address: Integer; Value: Byte); Override;
@@ -27,13 +28,14 @@ Type
 
     // SChip 1.0 Legacy opcodes - Dxyn handles Dxy0 too for simplicity
 
-    Procedure Op00FD; Virtual; Procedure Op00FE; Virtual; Procedure Op00FF; Virtual; Procedure OpFx75; Virtual; Procedure OpFx85; Virtual;
+    Procedure Op00FD; Virtual; Procedure Op00FE; Virtual; Procedure Op00FF; Virtual;
+    Procedure OpFx75; Virtual; Procedure OpFx85; Virtual;
 
   End;
 
 implementation
 
-Uses Windows, SysUtils, Classes, Math, Chip8Int, Display, Sound;
+Uses Windows, SysUtils, Classes, Math, Chip8Int, Display, Sound, Fonts;
 
 Procedure TSChipLegacy10Core.BuildTables;
 Begin
@@ -65,14 +67,13 @@ Begin
 End;
 
 Procedure TSChipLegacy10Core.Reset;
-var
-  idx: Integer;
 Begin
 
   Inherited;
   hiresMode := False;
-  for idx := 0 to 99 Do Memory[idx + 160] := HiresFont10[idx];
-  MakeSoundBuffers(64);
+  LoadFont(Self, Font_Large_schip10);
+  FPS := 64;
+  MakeSoundBuffers(FPS, Audio);
 
 End;
 
@@ -89,15 +90,18 @@ Begin
     OpCodes[ci Shr 12];
     Inc(icnt);
 
-  Until iCnt >= maxipf;
+  Until FrameDone(iCnt >= maxipf);
 
   If Timer > 0 then Dec(Timer);
+  Inc(iFrameCount);
+  emuFrameLength := GetTicks - emuLastTicks;
   DoSoundTimer;
 
   If DisplayFlag Then Present;
 
-  InjectSound(@FrameBuffer[0], Not FullSpeed);
+  InjectSound(Audio, Not FullSpeed);
 
+  GetTimings;
   If FullSpeed Then
     Inc(ipf, icnt)
   Else Begin
@@ -105,6 +109,11 @@ Begin
   End;
   Dec(icnt, maxIpf);
 
+End;
+
+Procedure TSChipLegacy10Core.Frame(AddCycles: Integer);
+Begin
+  // Ignore
 End;
 
 // Begin Core opcodes
@@ -292,13 +301,13 @@ Begin
         bts := Ord(b And bit > 0);
         bit := bit Shr 1;
         Addr := ((x + col) And 127) + ((y + row * 2) And 63) * 128;
-        If DisplayMem[Addr] <> 0 Then Inc(cc);
+        If (Bts <> 0) And (DisplayMem[Addr] <> 0) Then Inc(cc);
         np := DisplayMem[Addr] Xor bts;
         DisplayMem[Addr] := np;
         DisplayMem[Addr + 128] := np;
       End;
     End;
-    If cc > 0 Then Regs[$F] := 1;
+    If cc <> 0 Then Regs[$F] := 1;
     If Not DoQuirks Or DisplayWait Then
       icnt := maxipf -1;
   End;

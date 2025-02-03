@@ -14,7 +14,7 @@ Type
 
     Procedure OpDxyn; Override;
 
-    // SChip 1.1 Legacy opcodes - Dxyn handles Dxy0 too for simplicity
+    // Modern SChip opcodes - Dxyn handles Dxy0 too for simplicity
 
     Procedure Op00Cn; Override; Procedure Op00FB; Override; Procedure Op00FC; Override; Procedure Op00FE; Override; Procedure Op00FF; Override;
 
@@ -22,7 +22,7 @@ Type
 
 implementation
 
-Uses Windows, SysUtils, Classes, Math, Chip8Int, Display, Sound;
+Uses Windows, SysUtils, Classes, Math, Chip8Int, Display, Sound, Fonts;
 
 Procedure TSChipModernCore.BuildTables;
 Var
@@ -40,16 +40,15 @@ Begin
 End;
 
 Procedure TSChipModernCore.Reset;
-var
-  idx: Integer;
 Begin
 
   Inherited;
 
   FillMemory(@Memory[0], Length(Memory), 0);
-  for idx := 0 to 79 Do Memory[idx + 80] := Font[idx];
-  for idx := 0 to 99 Do Memory[idx + 160] := HiresFont11[idx];
-  MakeSoundBuffers(60);
+  LoadFont(Self, Font_Small_VIP);
+  LoadFont(Self, Font_Large_schip11);
+  FPS := 60;
+  MakeSoundBuffers(FPS, Audio);
   DisplayWait := False;
 
 End;

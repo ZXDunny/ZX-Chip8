@@ -407,7 +407,7 @@ Begin
       End;
   End;
   Regs[$F] := Ord(cc <> 0);
-  If DisplayWait Then
+  If DisplayWait And Not FirstInstruction Then
     iCnt := ipf -1;
   DisplayFlag := True;
 End;

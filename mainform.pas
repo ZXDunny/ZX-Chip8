@@ -35,7 +35,8 @@ type
     N2: TMenuItem;
     Chip8Model1: TMenuItem;
     Browser1: TMenuItem;
-    BuzzerShape: TShape;
+    KeyPanel: TPanel;
+    KeyImage: TImage;
     procedure FormCreate(Sender: TObject);
     procedure FormKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);
     procedure FormShow(Sender: TObject);
@@ -137,10 +138,8 @@ begin
     SetBackground(CurBuzzerColor);
     DisplayUpdate := DisplayUpdate Or (bz > 0);
 
-    If DisplayUpdate Then Begin
-      Interpreter.Render;
-      FrameLoop;
-    End;
+    If DisplayUpdate Then Interpreter.Render;
+    FrameLoop;
 
   DisplayLock.Leave;
 
@@ -157,8 +156,6 @@ begin
 
   MakeTimings;
   Caption := '[' + GetModelName(CurrentModel) + '] ' + s + Format(' (Frame time: %5.2f, Time since: %5.2f, emuTime: %5.2f, emuSince: %5.2f)', [Timings[0], Timings[1], Timings[2], Timings[3]]);
-
-  BuzzerShape.Brush.Color := CurBuzzerColor;
 
 end;
 
@@ -322,8 +319,8 @@ begin
       DisplayPanel.SetBounds(rect.Left, rect.Top, rect.Right - rect.Left, rect.Bottom - rect.Top);
       DisplayPanel.Anchors := [akLeft, akTop, akRight, akBottom];
     End;
-    DisplayUpdate := True;
     Interpreter.Restart;
+    DisplayUpdate := True;
     Exit;
   End;
 
@@ -360,7 +357,8 @@ begin
   If DisplayReady Then Begin
     ResizeDisplay;
     DisplayUpdate := True;
-    WMRender(msg);
+    If Assigned(Interpreter) And Assigned(Interpreter.Core) Then
+      WMRender(msg);
   End;
 
 end;
@@ -396,6 +394,8 @@ Var
   i: Integer;
   mi: TMenuItem;
 begin
+
+  DisplayPanel.SetBounds(4, 4, ClientWidth - 8, ClientHeight - 8);
 
   CurrentModel := Chip8_VIP;
   InitDisplay(60, 64, 32, True, DisplayPanel);

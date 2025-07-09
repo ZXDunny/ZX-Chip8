@@ -31,7 +31,7 @@ Var
   GlHandle: hWnd;
   DisplayUpdate, DoScale, FullScreen, MaintainAspect, DisplayReady: Boolean;
   intWidth, intHeight, scaleWidth, scaleHeight, winWidth, winHeight, ScaleFactor, FrameCount, LastFrames,
-  DisplayWidth, DisplayHeight, lastWinX, lastWinY, lastWinWidth, lastWinHeight: Integer;
+  DisplayWidth, DisplayHeight, lastWinX, lastWinY, lastWinWidth, lastWinHeight, MarginSize: Integer;
   StartTime, LastFrameCount, FrameTime, LastTicks, LastFrameDuration, LastFrameTime, LastFrameStart: Double;
   DisplayArray, ScaledArray: Array of LongWord;
   BaseTime, TimerFreq: Int64;
@@ -46,6 +46,16 @@ implementation
 
 Uses MainForm, Math;
 
+Function GetScreenRefreshRate: Integer;
+var
+  DeviceMode: TDeviceMode;
+const
+  ENUM_CURRENT_SETTINGS = DWORD(-1);
+Begin
+  EnumDisplaySettings(nil, ENUM_CURRENT_SETTINGS, DeviceMode);
+  Result := DeviceMode.dmDisplayFrequency;
+End;
+
 Procedure TRenderThread.Execute;
 Var
   LaunchTime, CurTime, VideoFPS: Double;
@@ -53,7 +63,7 @@ Var
 Begin
 
   Dead := False;
-  VideoFPS := 1000/60;
+  VideoFPS := 1000 / GetScreenRefreshRate;
   LaunchTime := GetTicks;
   FreeOnTerminate := True;
   NameThreadForDebugging('Render Thread');
@@ -67,6 +77,8 @@ Begin
       PostMessage(Main.Handle, WM_Render, 0, 0);
       LastFrame := CurFrame;
     End;
+
+    Sleep(1);
 
   End;
 
@@ -142,6 +154,8 @@ begin
     dwDamageMask:= 0;
   end;
 
+  marginSize := 4;
+
   DC := GetDC(GLHandle);
   PixelFormat := ChoosePixelFormat(DC, @pfd);
   SetPixelFormat(DC,PixelFormat,@pfd);
@@ -160,12 +174,12 @@ Begin
   if MaintainAspect Then Begin
 
     ratio := Min(winWidth / intWidth, winHeight / intheight);
-    newWidth := Round(ratio * intWidth);
-    newHeight := Round(ratio * intHeight);
+    newWidth := Round(ratio * intWidth) - MarginSize * 2;
+    newHeight := Round(ratio * intHeight) - MarginSize * 2;
     glViewPort((winWidth - newWidth) Div 2, (winHeight - newHeight) Div 2, newWidth, newHeight);
 
   End Else
-    glViewPort(0, 0, winWidth, winHeight);
+    glViewPort(MarginSize, MarginSize, winWidth - MarginSize, winHeight - MarginSize);
 
   glMatrixMode(GL_PROJECTION);
   glLoadIdentity;

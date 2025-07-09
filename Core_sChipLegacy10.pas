@@ -12,6 +12,7 @@ Type
     nn: Word;
     hiresMode: Boolean;
     clipcol: Integer;
+    FirstInstruction: Boolean;
 
     Procedure BuildTables; Override;
     Procedure Reset; Override;
@@ -80,6 +81,8 @@ End;
 Procedure TSChipLegacy10Core.InstructionLoop;
 Begin
 
+  FirstInstruction := True;
+
   Repeat
 
     cil := GetMem(PC);
@@ -89,6 +92,8 @@ Begin
 
     OpCodes[ci Shr 12];
     Inc(icnt);
+
+    FirstInstruction := False;
 
   Until FrameDone(iCnt >= maxipf);
 
@@ -102,12 +107,11 @@ Begin
   InjectSound(Audio, Not FullSpeed);
 
   GetTimings;
-  If FullSpeed Then
-    Inc(ipf, icnt)
-  Else Begin
-    ipf := icnt;
-  End;
-  Dec(icnt, maxIpf);
+  ipf := icnt;
+  icnt := 0;
+
+  If Not FullSpeed Then
+    Dec(icnt, maxIpf);
 
 End;
 
@@ -308,7 +312,7 @@ Begin
       End;
     End;
     If cc <> 0 Then Regs[$F] := 1;
-    If Not DoQuirks Or DisplayWait Then
+    If Not DoQuirks Or (DisplayWait And Not FirstInstruction) Then
       icnt := maxipf -1;
   End;
   DisplayFlag := True;

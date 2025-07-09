@@ -94,7 +94,7 @@ End;
 Function TCore.FrameDone(Condition: Boolean): Boolean;
 Begin
   If FullSpeed Then Begin
-    Result := GetTicks - emuLastTicks >= Audio^.FrameMS_D * 10
+    Result := GetTicks - emuLastTicks >= Audio^.FrameMS_D
   End Else
     Result := Condition;
 End;

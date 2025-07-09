@@ -193,7 +193,8 @@ Begin
     End;
   End;
   Regs[$F] := Ord(cc <> 0);
-  If DisplayWait Then iCnt := maxipf -1;
+  If DisplayWait And not FirstInstruction Then
+    iCnt := maxipf -1;
   DisplayFlag := True;
 End;
 

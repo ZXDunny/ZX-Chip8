@@ -371,6 +371,7 @@ Begin
             Break;
           End;
       End;
+      SoundFlag := 1;
     End;
 
   End;

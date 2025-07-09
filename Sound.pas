@@ -298,7 +298,7 @@ Begin
             pSmallInt(@FrameBuffer[idx * 2])^ := oSample;
           End;
           If dcOut Then Begin
-            oSample := Round(pSmallInt(@FrameBuffer[BuffSize - ((idx + 1) * 2)])^ * (1 - Scalar));
+            oSample := Round(pSmallInt(@FrameBuffer[BuffSize - ((idx + 1) * 2)])^ * Scalar);
             pSmallInt(@FrameBuffer[BuffSize - ((idx + 1) * 2)])^ := oSample;
           End;
           Scalar := Scalar + ScaleInc;

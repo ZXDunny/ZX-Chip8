@@ -114,6 +114,7 @@ Begin
       Inc(j, 4);
     End;
     InjectSound(Audio, Not FullSpeed);
+    SoundFlag := 1;
   End;
 End;
 

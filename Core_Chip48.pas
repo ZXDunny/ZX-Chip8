@@ -15,13 +15,13 @@ Type
 
     Procedure OpFx55; Override; Procedure OpFx65; Override;
     Procedure Op8xy6; Override; Procedure Op8xyE; Override;
-    Procedure OpBnnn; Override;
+    Procedure OpBnnn; Override; Procedure OpDxyn; Override;
 
   End;
 
 implementation
 
-Uses Windows, Display, Sound, Chip8Int;
+Uses Windows, Math, Display, Sound, Chip8Int;
 
 Procedure TChip48Core.BuildTables;
 Begin
@@ -33,6 +33,7 @@ Begin
   Opcodes8[$E]  := Op8xyE;
   OpcodesF[$55] := OpFx55;
   OpcodesF[$65] := OpFx65;
+  Opcodes[13]   := OpDxyn;
 
 End;
 
@@ -43,6 +44,7 @@ Begin
 
   maxipf := 20;
   FPS := 64;
+  DisplayWait := False;
   MakeSoundBuffers(FPS, Audio);
 
 End;
@@ -134,6 +136,41 @@ Begin
   t := Regs[x] Shr 7;
   Regs[x] := Regs[x] Shl 1;
   Regs[$F] := t;
+End;
+
+Procedure TChip48Core.OpDxyn;
+Var
+  cx, cy, dx, j, dAddr, col, a, lx, ly: integer;
+  Bit, db: Byte;
+Begin
+  // Dxyn - draw "sprite"
+  t := 0;
+  n := ci And $F;
+  cx := Regs[(ci Shr 8) And $F] And 63;
+  cy := Regs[(ci Shr 4) And $F] And 31;
+  If Not DoQuirks or Not DxynWrap Then
+    ly := Min(n - 1, 32 - cy -1)
+  else
+    ly := n - 1;
+  For a := 0 To ly Do Begin
+    db := GetMem(i + a);
+    bit := $80;
+    If Not DoQuirks or Not DxynWrap Then
+      lx := Min(cx + 7, 63)
+    else
+      lx := cx + 7;
+    For dx := cx To lx Do Begin
+      j := Ord((db And Bit) > 0);
+      Bit := Bit Shr 1;
+      dAddr := (dx And 63) + ((cy And 31) * 64);
+      col := Ord(j And DisplayMem[dAddr]);
+      t := t Or col;
+      DisplayMem[dAddr] := DisplayMem[dAddr] Xor j;
+    End;
+    Inc(cy);
+  End;
+  Regs[$F] := t;
+  DisplayFlag := True;
 End;
 
 end.

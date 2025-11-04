@@ -1,0 +1,86 @@
+ bootstrap loader code to load in a VIP format tape
+as per RCA "COSMAC VIP Instruction Manual", "Appendix A - Test and Operating Data"
+ The most signfigant byte of the first [load] address is in M(0003), 
+and the number of pages to be input in in M*(0006).
+
+;0000 7100F801BAF802B990AAA9BFF83BAFF80ABDDF330F2D9D3A12DF3B19F809ADAB;
+;0020 9D76BD2BDF8B3A201D8DF633379D5A1A29893A19993A19C0B000DOF8103D3D3D;
+;0040 48FF013A3F1DF880FE3549303A
+;hand disassembly Herb Johnson March 19 2018
+
+
+ ;register usage
+                 
+                ;R0 = program counter
+                ;R9 = counter 
+                ;RA = address pointer to read/write memory
+                ;RB = getbyte subroutine PC
+ 		;RD = bit counter?
+                ;RF = key subroutine PC
+
+
+		ORG  0000H
+71		DIS		;00	
+00		DB   00H	;01
+F8 01		LDI  01H	;02 load address high byte
+BA		PHI  RA		;04
+F8 02		LDI  02H	;05 number of pages to read
+B9		PHI  R9		;07 
+90		GHI  R0		;08 probably cheap way to get 00H
+AA		PLO  RA		;09 RA points to 0100H, where VIP monitor loaded
+A9		PLO  R9         ;   R9 is 0200H to load 512byte VIP monitor
+BF		PHI  RF
+F8 3B	tread:	LDI  low tapein	;0c point to tapein via sep RF
+AF		PLO  RF
+F8 0A	tread1:	LDI  0AH	;0f read 10 bits
+BD		PHI  RD		;11
+DF	tread2:	SEP  RF		; call tapein (read a bit)
+
+33 0F		BDF  tread1	;13
+2D		DEC  RD
+9D		GHI  RD
+3A 12		BNZ  tread2	;17
+DF	tread5:	SEP  RF		; call tapein (read a bit)
+3B 19		BNF  tread5
+F8 09		LDI  09H	;1C
+AD		PLO  RD
+AB		PLO  RB
+9D	tread3:	GHI  RD		;20
+76		SHRC		;21
+BD		PHI  RD
+2B		DEC  RB
+DF		SEP  RF		;24 call tapein to read 1 bit
+8B		GLO  RB
+3A 20		BNZ  tread3
+1D		INC  RD		;28
+8D		GLO  RD
+F6 		SHR
+33 37		BDF  exit 	;2B
+9D	tread4:	GHI  RD		;2D
+5A		STR  RA	
+1A		INC  RA
+29		DEC  R9		;30
+89		GLO  R9
+3A 19		BNZ  tread5	;32
+99		GHI  R9
+3A 19		BNZ  tread5	;35
+C0 B000 exit:	JMP  B000H	; not sure what's up here
+
+                ;
+                ; tapein -- cassette tape audio input; read one cycle.
+                ;       If low frequency, returns DF=1 and increments RD.
+                ;       If high frequency, returns DF=0
+
+DO	tapeinx: SEP  R0	;3A return
+F8 10	tapein:	LDI  10H	; set software timer to 16 decimal
+3D 3D		BN2  $		;3D wait for EF2=1 (EF2 pin low, rising edge)
+3D 48  	tin1:	BN2  tin2	;3F wait 4X16 cycles testing EF2
+FF 01		SMI  01H	;41
+3A 3F		BNZ  tin1	; if it times out, low freq
+1D		INC  RD		; incr RD
+F8 80		LDI  80H	; and set D
+FE	tin2:	SHL		;48 shift high bit of D into DF
+35 49		B2   $		;49  wait for EF2=0 (EF2 pin high, low half of cycle)
+30 3A		BR   tapeinx	;4B  and exit
+		END
+

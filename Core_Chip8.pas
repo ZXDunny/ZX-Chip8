@@ -639,6 +639,9 @@ End;
 Procedure TChip8Core.OpFx18;
 Begin
   // Fx18 - Sound timer = Reg X
+
+  If Musical_Tone Then
+    BuzzerTone := SemiTonesToHz((Round((12 * PC / 2) + StackPtr) Mod 12) - 12);
   sTimer := Regs[(ci Shr 8) And $F];
   Cycles := 6;
 End;

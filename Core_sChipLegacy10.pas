@@ -11,7 +11,7 @@ Type
     Storage: Array[0..15] of Byte;
     nn: Word;
     hiresMode: Boolean;
-    clipcol: Integer;
+    clipcol, colFlag: Integer;
     FirstInstruction: Boolean;
 
     Procedure BuildTables; Override;
@@ -316,6 +316,7 @@ Begin
       icnt := maxipf -1;
   End;
   DisplayFlag := True;
+  colFlag := Regs[$F];
 End;
 
 Procedure TSChipLegacy10Core.OpFxnn;

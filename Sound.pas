@@ -18,14 +18,15 @@ Type
 
 Procedure InitSound(Freq: integer);
 Procedure InjectSound(Obj: pSoundObject; WaitForSync: Boolean);
-Function  GetSoundPos(Obj: pSOundObject): Integer;
-Function  MakeSoundBuffers(Hz: Integer; Obj: pSOundObject): Integer;
-Procedure PauseSound(Obj: pSOundObject);
-Procedure ResumeSound(Obj: pSOundObject);
-Procedure StopSound(Obj: pSOundObject);
+Function  GetSoundPos(Obj: pSoundObject): Integer;
+Function  MakeSoundBuffers(Hz: Integer; Obj: pSoundObject): Integer;
+Procedure PauseSound(Obj: pSoundObject);
+Procedure ResumeSound(Obj: pSoundObject);
+Procedure StopSound(Obj: pSoundObject);
 Procedure StopAllSounds;
 Procedure CloseSound;
 Procedure DeClick(dcIn, dcOut: Boolean; Obj: pSoundObject);
+Function  SemiTonesToHz(SemiTone: Double): Double;
 
 Var
 
@@ -83,7 +84,7 @@ Begin
 
 End;
 
-Function GetSoundPos(Obj: pSOundObject): Integer;
+Function GetSoundPos(Obj: pSoundObject): Integer;
 Begin
 
   If Obj^.Enabled Then
@@ -93,7 +94,7 @@ Begin
 
 End;
 
-Function MakeSoundBuffers(Hz: Integer; Obj: pSOundObject): Integer;
+Function MakeSoundBuffers(Hz: Integer; Obj: pSoundObject): Integer;
 Var
   Idx: Integer;
 Begin
@@ -179,7 +180,7 @@ Begin
   End;
   Variance := Variance / (2 * numSamples);
   StdDev := Sqrt(Variance);
-  Result := Power(RMS * StdDev * 2, 0.5);
+  Result := Min(1, Power(RMS * StdDev * 2, 0.5));
 
 End;
 
@@ -261,17 +262,17 @@ Begin
 
 End;
 
-Procedure PauseSound(Obj: pSOundObject);
+Procedure PauseSound(Obj: pSoundObject);
 Begin
 
   If Obj^.Enabled Then Begin
-    FillMemory(@Obj^.AudioBuffer[0], Length(Obj^.AudioBuffer), 0);
     BASS_ChannelPause(Obj^.Channel);
+    FillMemory(@Obj^.AudioBuffer[0], Length(Obj^.AudioBuffer), 0);
   End;
 
 End;
 
-Procedure ResumeSound(Obj: pSOundObject);
+Procedure ResumeSound(Obj: pSoundObject);
 Begin
 
   If Obj^.Enabled Then
@@ -304,6 +305,13 @@ Begin
           Scalar := Scalar + ScaleInc;
         End;
       End;
+
+End;
+
+Function  SemiTonesToHz(SemiTone: Double): Double;
+Begin
+
+  Result := (220 * Power(2, (1/4))) * (Power(2, SemiTone/12));
 
 End;
 

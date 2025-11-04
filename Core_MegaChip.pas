@@ -40,6 +40,7 @@ Type
     Function  Blend(rgb1, rgb2: TClr): TClr;
     Procedure DoSoundTimer; Override;
     Procedure BlendBuffers;
+    Procedure FlipBuffers;
     Procedure Skip01nn;
 
     Procedure Op0nnn; Override; Procedure OpBnnn; Override; Procedure OpDxyn; Override; Procedure Op00FE; Override;
@@ -56,11 +57,18 @@ Type
 
 implementation
 
-Uses SysUtils, Classes, Windows, Math, Chip8Int, Display, Sound;
+Uses SysUtils, Classes, Windows, Math, Chip8Int, Display, Sound, Fonts;
 
 Const
 
   Opacities: Array[0..5] of Byte = (255, 64, 128, 192, 255, 255);
+
+Procedure TMegaChipCore.FlipBuffers;
+Begin
+
+  CurBuffer := 1 - CurBuffer;
+
+End;
 
 Function TMegaChipCore.AlphaBlend(rgb1, rgb2: LongWord; t: Byte): Longword;
 Var
@@ -145,7 +153,7 @@ Begin
 
   Opcodes[11] := OpBnnn;
 
-  Opcodes[$D] := OpDxyn; Opcodes0[$FE] := Op00FE; Opcodes0[$FF] := Op00FF; Opcodes[$B]   := Op00Bn;
+  Opcodes[$D] := OpDxyn; Opcodes0[$FE] := Op00FE; Opcodes0[$FF] := Op00FF; Opcodes0[$B]  := Op00Bn;
   Opcodes[3]  := Op3xnn; Opcodes[4]    := Op4xnn; Opcodes[5]    := Op5xy0; OpcodesF[$1E] := OpFx1E;
   Opcodes[9]  := Op9xy0; OpcodesE[$9E] := OpEx9E; OpcodesE[$A1] := OpExA1;
 
@@ -171,6 +179,7 @@ Begin
   FillMemory(@DisplayBuffers[1][0], 256 * 192 * 4, 0);
   FillMemory(@CollMap[0], 256 * 192, 0);
   FillMemory(@DisplayMem[0], Length(DisplayMem), 0);
+  LoadFont(Self, Font_Large_Fish);
 
   FPS := 50;
   MakeSoundBuffers(FPS, Audio);
@@ -254,8 +263,6 @@ Var
   py, px: Integer;
 Begin
 
-  // Prepare the display for update.
-
   DisplayLock.Enter;
 
   If Not MegaChipMode Then Begin
@@ -279,7 +286,6 @@ Begin
     End;
   End Else Begin
     CopyMemory(@PresentDisplay[0], @DisplayBuffers[CurBuffer][0], 256 * 192 * 4);
-    CurBuffer := 1 - CurBuffer;
     DisplayUpdate := True;
   End;
 
@@ -405,7 +411,6 @@ Begin
   MegaChipMode := True;
   ipf := 3000;
   icnt := ipf -1;
-  Present;
 End;
 
 Procedure TMegaChipCore.Op00Cn;
@@ -468,6 +473,7 @@ Begin
   // $00E0 - Clear display
   If MegaChipMode Then Begin
     Present;
+    FlipBuffers;
     FillMemory(@DisplayBuffers[CurBuffer][0], 256 * 192 * 4, 0);
     FillMemory(@CollMap[0], 256 * 192, 0);
     icnt := maxipf -1;
@@ -652,14 +658,24 @@ End;
 
 Procedure TMegaChipCore.OpDxyn;
 Var
-  row, col, cy, cx, idx, pIdx, dOffs: Integer;
+  row, col, cy, cx, idx, pIdx, dOffs, mult, icnt2: Integer;
   b, bts, bit: Byte;
+  p: LongWord;
   vF: Boolean;
+
+  Function fixedScale8(x: Byte; y: Word): Byte;
+  Begin
+    result := Min(255, (x * (y * 257) + $8080) shr 16);
+  End;
+
 Begin
   // Dxyn - Draw Sprite
-  If Not MegaChipMode Then
-    Inherited
-  Else Begin
+  If Not MegaChipMode Then Begin
+    icnt2 := icnt;
+    Inherited;
+    Regs[$F] := colFlag;
+    icnt := icnt2; // Do not display wait. At all.
+  End Else Begin
     vF := False;
     x := Regs[(ci Shr 8) And $F] And $FF;
     y := Regs[(ci Shr 4) And $F] And $FF;
@@ -667,6 +683,8 @@ Begin
       // I < 256 means a font draw, so use the old Dxyn for that one.
       n := ci And $F;
       For row := 0 To Min(n -1, 191 - y) Do Begin
+        mult := 255 - n * row;
+        p := (FixedScale8(mult, 264) Shl 16) or (FixedScale8(mult, 291) Shl 8) or (FixedScale8(mult, 309));
         b := GetMem(i + row);
         bit := $80;
         For col := 0 To Min(7, 255 - x) Do Begin
@@ -676,7 +694,7 @@ Begin
             dOffs := (row + y) * 256 + (col + x);
             vF := vF Or (CollMap[dOffs] = 255);
             CollMap[dOffs] := 255;
-            DisplayBuffers[CurBuffer][dOffs] := Palette[1];
+            DisplayBuffers[CurBuffer][dOffs] := p;
           End;
         End;
       End;

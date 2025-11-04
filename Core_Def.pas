@@ -24,7 +24,7 @@ Type
     t, x, y, n: Byte;
     PC, StackPtr: LongWord;
     ipf, maxipf, LastFx0A, Fx0ATime, Fx0ADelay, REPDEL, REPPER, FPS: Integer;
-    ExitLoop, DoQuirks, DisplayWait, DxynWrap, FullSpeed, Press_fx0A: Boolean;
+    ExitLoop, DoQuirks, DisplayWait, DxynWrap, FullSpeed, Press_fx0A, Musical_Tone: Boolean;
     ci, cil, Cycles, mCycles, LastFrameCount, Timer, sTimer, NextFrame, icnt, i, nnn, keyStage, LastS, iFrameCount: Integer;
 
     emuLastTicks, emuLastFrameTime, emuFrameLength: Double;
@@ -83,6 +83,7 @@ Begin
   DxynWrap := False;
   DisplayWait := True;
   Press_Fx0A := True;
+  Musical_Tone := True;
   LastFx0A := -1;
   REPDEL := 20;
   REPPER := 4;
